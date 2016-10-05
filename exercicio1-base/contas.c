@@ -46,30 +46,21 @@ int lerSaldo(int idConta) {
 
 
 void simular(int numAnos) {
-	int PID, state;
-	PID = fork();
-
-	if (PID == 0) {
-		simulacao(numAnos);
-	} else {
-		return;
-	}
-}
-
-void simulacao (int numAnos){
 	int novosSaldos[NUM_CONTAS], i, j, k;
 
+	//Copia os saldos das contas para um novo vetor
 	for (k = 0; k < NUM_CONTAS; k++)
 		novosSaldos[k] = contasSaldos[k];
 
+	//Percorre os anos indicados
 	for (i = 0; i < numAnos; i++) {
 		printf("SIMULACAO: Ano %d\n=================\n", numAnos );
 
+		//Percorre todas as contas
 		for (j = 0; j < NUM_CONTAS; j++) {
 			printf("Conta %d, Saldo %d \n ", j + 1, novosSaldos[j]);
 			novosSaldos[j] += novosSaldos[j] * TAXAJURO - CUSTOMANUTENCAO;
 		}
-		puts();
+		puts("");
 	}
-
 }
