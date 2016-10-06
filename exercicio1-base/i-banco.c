@@ -6,6 +6,7 @@
 #include "commandlinereader.h"
 #include "contas.h"
 #include <unistd.h>
+#include <sys/wait.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -26,7 +27,8 @@ int main (int argc, char** argv) {
 
 	char *args[MAXARGS + 1];
 	char buffer[BUFFER_SIZE];
-	//pthread_t tid[MAXTAREFA];
+	int index = 0;
+	pid_t processos[MAXTAREFA];
 
 	inicializarContas();
 
@@ -41,7 +43,20 @@ int main (int argc, char** argv) {
 		if (numargs < 0 ||
 			(numargs > 0 && (strcmp(args[0], COMANDO_SAIR) == 0))) {
 			
-			puts("i-banco vai terminar.\n--");
+			puts("i-banco vai terminar.\n--\n");
+
+			int i, pid, status;
+			for (i = 0; i < index; i++) {
+
+				pid = wait(&status);
+				printf("FILHO TERMINADO (PID=%d; ", pid);
+
+				if (status == 0) {
+					printf("terminou normalmente)");
+				} else {
+					printf("terminou abruptamente)");
+				}
+			}
 
 			puts("--\ni-banco terminou.");
 						
@@ -64,7 +79,7 @@ int main (int argc, char** argv) {
 			valor = atoi(args[2]);
 
 			if (debitar (idConta, valor) < 0)
-				printf("%s(%d, %d): OK\n\n", COMANDO_DEBITAR, idConta, valor);
+				printf("%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, idConta, valor);
 			else
 				printf("%s(%d, %d): OK\n\n", COMANDO_DEBITAR, idConta, valor);
 		}
@@ -104,20 +119,20 @@ int main (int argc, char** argv) {
 
 			/* Simular */
 			else if (strcmp(args[0], COMANDO_SIMULAR) == 0) {
-				int PID;
-				PID = fork();
+				pid_t pid;
+				pid = fork();
 
-				if (PID == 0) {
-					/*
-					if (pthread_create (&tid[i], 0, simular, (void *) atoi(args[1])) == 0)
-						puts("Criada tarefa");
-					*/
+				if (pid == 0) {
 					simular(atoi(args[1]));
 					exit(0);
 				}
-			}
-
-			else {
+				else if (pid > 0){
+					processos[index++] = pid;
+				}
+				else {
+					puts("Erro a criar o processo filho");
+				}
+			} else {
 				printf("Comando desconhecido. Tente de novo.\n");
 			}
 	} 
