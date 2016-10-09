@@ -20,7 +20,7 @@
 
 #define MAXARGS 3
 #define BUFFER_SIZE 100
-#define MAXTAREFA 20
+#define MAXTAREFA 21
 
 
 int main (int argc, char** argv) {
