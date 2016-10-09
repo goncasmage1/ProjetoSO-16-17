@@ -7,20 +7,23 @@
 #include "contas.h"
 #include <unistd.h>
 #include <sys/wait.h>
+#include <pthread.h>
+#include <signal.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <pthread.h>
 
 #define COMANDO_DEBITAR "debitar"
 #define COMANDO_CREDITAR "creditar"
 #define COMANDO_LER_SALDO "lerSaldo"
 #define COMANDO_SIMULAR "simular"
 #define COMANDO_SAIR "sair"
+#define COMANDO_SAIR_AGORA "sair agora"
 
 #define MAXARGS 3
 #define BUFFER_SIZE 100
-#define MAXTAREFA 21
+#define MAXTAREFA 20
 
 
 int main (int argc, char** argv) {
@@ -30,20 +33,37 @@ int main (int argc, char** argv) {
 	int index = 0;
 	pid_t processos[MAXTAREFA];
 
+	signal(SIGINT, terminarASAP);
+
 	inicializarContas();
 
 	printf("Bem-vinda/o ao i-banco\n\n");
 	  
 	while (1) {
+
 		int numargs;
-	
 		numargs = readLineArguments(args, MAXARGS+1, buffer, BUFFER_SIZE);
 
-		/* EOF (end of file) do stdin ou comando "sair" */
+		/* EOF (end of file) do stdin ou comando "sair agora" */
 		if (numargs < 0 ||
-			(numargs > 0 && (strcmp(args[0], COMANDO_SAIR) == 0))) {
+			(numargs > 0 && (strcmp(args[0], COMANDO_SAIR_AGORA) == 0))) {
 			
-			puts("i-banco vai terminar.\n--\n");
+			int i;
+			for (i = 0; i < index; i++) {
+				kill(processos[i], SIGINT);
+			}
+
+			exit(EXIT_SUCCESS);			
+		}
+
+		else if (numargs == 0)
+			/* Nenhum argumento; ignora e volta a pedir */
+			continue;
+
+		/* Sair */
+		else if (strcmp(args[0], COMANDO_SAIR) == 0) {
+
+			puts("i-banco vai terminar.\n--");
 
 			int i, pid, status;
 			for (i = 0; i < index; i++) {
@@ -59,13 +79,9 @@ int main (int argc, char** argv) {
 			}
 
 			puts("--\ni-banco terminou.");
-						
+
 			exit(EXIT_SUCCESS);
 		}
-	
-		else if (numargs == 0)
-			/* Nenhum argumento; ignora e volta a pedir */
-			continue;
 			
 		/* Debitar */
 		else if (strcmp(args[0], COMANDO_DEBITAR) == 0) {

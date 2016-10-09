@@ -2,11 +2,12 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #define atrasar() sleep(ATRASO)
 			 
 int contasSaldos[NUM_CONTAS];
-
+bool terminarAgora;
 
 int contaExiste(int idConta) {
   return (idConta > 0 && idConta <= NUM_CONTAS);
@@ -44,7 +45,6 @@ int lerSaldo(int idConta) {
 	return contasSaldos[idConta - 1];
 }
 
-
 void simular(int numAnos) {
 	int novosSaldos[NUM_CONTAS], i, j, k;
 
@@ -58,12 +58,19 @@ void simular(int numAnos) {
 
 		//Percorre todas as contas
 		for (j = 0; j < NUM_CONTAS; j++) {
-			printf("Conta %d, Saldo %d \n ", j + 1, novosSaldos[j]);
+			printf("Conta %d, Saldo %d\n", j + 1, novosSaldos[j]);
 			novosSaldos[j] += novosSaldos[j] * TAXAJURO - CUSTOMANUTENCAO;
 			if (novosSaldos[j] < 0) {
 				novosSaldos[j] = 0;
 			}
 		}
-		puts("");
+		if (terminarAgora) {
+			puts("Simulacao terminada por signal");
+			exit(EXIT_SUCCESS);
+		}
 	}
+}
+
+void terminarASAP() {
+	terminarAgora = true;
 }

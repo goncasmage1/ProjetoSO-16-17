@@ -18,6 +18,7 @@ int debitar(int idConta, int valor);
 int creditar(int idConta, int valor);
 int lerSaldo(int idConta);
 void simular(int numAnos);
+void terminarASAP();
 
 
 #endif
