@@ -1,5 +1,6 @@
 #include "contas.h"
 #include <unistd.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -10,24 +11,24 @@ int contasSaldos[NUM_CONTAS];
 bool terminarAgora;
 
 int contaExiste(int idConta) {
-  return (idConta > 0 && idConta <= NUM_CONTAS);
+	return (idConta > 0 && idConta <= NUM_CONTAS);
 }
 
 void inicializarContas() {
-  int i;
-  for (i=0; i<NUM_CONTAS; i++)
-	contasSaldos[i] = 0;
+	int i;
+	for (i=0; i<NUM_CONTAS; i++)
+		contasSaldos[i] = 0;
 }
 
 int debitar(int idConta, int valor) {
-  atrasar();
-  if (!contaExiste(idConta))
-	return -1;
-  if (contasSaldos[idConta - 1] < valor)
-	return -1;
-  atrasar();
-  contasSaldos[idConta - 1] -= valor;
-  return 0;
+	atrasar();
+	if (!contaExiste(idConta))
+		return -1;
+	if (contasSaldos[idConta - 1] < valor)
+		return -1;
+	atrasar();
+	contasSaldos[idConta - 1] -= valor;
+	return 0;
 }
 
 int creditar(int idConta, int valor) {
@@ -48,6 +49,8 @@ int lerSaldo(int idConta) {
 void simular(int numAnos) {
 	int novosSaldos[NUM_CONTAS], i, j, k;
 
+	signal(SIGUSR1, terminarASAP);
+
 	//Copia os saldos das contas para um novo vetor
 	for (k = 1; k <= NUM_CONTAS; k++)
 		novosSaldos[k-1] = lerSaldo(k);
@@ -66,7 +69,7 @@ void simular(int numAnos) {
 		}
 		if (terminarAgora) {
 			puts("Simulacao terminada por signal");
-			exit(EXIT_SUCCESS);
+			exit(EXIT_FAILURE);
 		}
 	}
 }
