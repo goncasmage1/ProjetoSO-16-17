@@ -69,7 +69,7 @@ void simular(int numAnos) {
 		}
 		if (terminarAgora) {
 			puts("Simulacao terminada por signal");
-			exit(EXIT_FAILURE);
+			exit(EXIT_SUCCESS);
 		}
 	}
 }
