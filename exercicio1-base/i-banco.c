@@ -78,6 +78,7 @@ int main (int argc, char** argv) {
 		/* Debitar */
 		else if (strcmp(args[0], COMANDO_DEBITAR) == 0) {
 			int idConta, valor;
+
 			if (numargs < 3) {
 				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_DEBITAR);
 			   continue;
@@ -95,18 +96,19 @@ int main (int argc, char** argv) {
 		/* Creditar */
 		else if (strcmp(args[0], COMANDO_CREDITAR) == 0) {
 			int idConta, valor;
-				if (numargs < 3) {
-					printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_CREDITAR);
-					continue;
-				}
 
-				idConta = atoi(args[1]);
-				valor = atoi(args[2]);
+			if (numargs < 3) {
+				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_CREDITAR);
+				continue;
+			}
 
-				if (creditar (idConta, valor) < 0)
-					printf("%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, idConta, valor);
-				else
-					printf("%s(%d, %d): OK\n\n", COMANDO_CREDITAR, idConta, valor);
+			idConta = atoi(args[1]);
+			valor = atoi(args[2]);
+		
+			if (creditar (idConta, valor) < 0)
+				printf("%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, idConta, valor);
+			else
+				printf("%s(%d, %d): OK\n\n", COMANDO_CREDITAR, idConta, valor);
 		}
 
 		/* Ler Saldo */
@@ -127,19 +129,23 @@ int main (int argc, char** argv) {
 
 		/* Simular */
 		else if (strcmp(args[0], COMANDO_SIMULAR) == 0) {
-			pid_t pid;
-			pid = fork();
+			int anos = atoi(args[1]);
+			if (anos > 0) {
+				pid_t pid = fork();
 
-			if (pid == 0) {
-				simular(atoi(args[1]));
-				exit(0);
+				if (pid == 0) {
+					simular(anos);
+					exit(0);
+				}
+				else if (pid > 0){
+					processos[index++] = pid;
+				}
+				else {
+					puts("Erro a criar o processo filho");
+				}
 			}
-			else if (pid > 0){
-				processos[index++] = pid;
-			}
-			else {
-				puts("Erro a criar o processo filho");
-			}
+			else 
+				printf("Numero de anos invalido\n");
 		} else {
 			printf("Comando desconhecido. Tente de novo.\n");
 		}
