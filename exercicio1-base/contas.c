@@ -22,9 +22,9 @@ void inicializarContas() {
 
 int debitar(int idConta, int valor) {
 	atrasar();
-	if (!contaExiste(idConta))
+	if (!contaExiste(idConta) || contasSaldos[idConta - 1] < valor || valor <= 0)
 		return -1;
-	if (contasSaldos[idConta - 1] < valor)
+	if ()
 		return -1;
 	atrasar();
 	contasSaldos[idConta - 1] -= valor;
@@ -33,7 +33,7 @@ int debitar(int idConta, int valor) {
 
 int creditar(int idConta, int valor) {
 	atrasar();
-	if (!contaExiste(idConta))
+	if (!contaExiste(idConta) || valor <= 0)
 		return -1;
 	contasSaldos[idConta - 1] += valor;
 	return 0;
@@ -62,16 +62,17 @@ void simular(int numAnos) {
 		//Percorre todas as contas
 		for (j = 0; j < NUM_CONTAS; j++) {
 			printf("Conta %d, Saldo %d\n", j + 1, novosSaldos[j]);
-			novosSaldos[j] += novosSaldos[j] * TAXAJURO - CUSTOMANUTENCAO;
+			novosSaldos[j] += (novosSaldos[j] * TAXAJURO - CUSTOMANUTENCAO) - 0.5;
 			if (novosSaldos[j] < 0) {
 				novosSaldos[j] = 0;
 			}
 		}
 		if (terminarAgora) {
 			puts("Simulacao terminada por signal");
-			exit(EXIT_FAILURE);
+			exit(EXIT_SUCCESS);
 		}
 	}
+	puts("");
 }
 
 void terminarASAP() {
