@@ -78,3 +78,5 @@ void simular(int numAnos) {
 void terminarASAP() {
 	terminarAgora = true;
 }
+
+
