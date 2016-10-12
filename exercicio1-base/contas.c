@@ -16,15 +16,13 @@ int contaExiste(int idConta) {
 
 void inicializarContas() {
 	int i;
-	for (i=0; i<NUM_CONTAS; i++)
+	for (i = 0 ; i < NUM_CONTAS; i++)
 		contasSaldos[i] = 0;
 }
 
 int debitar(int idConta, int valor) {
 	atrasar();
 	if (!contaExiste(idConta) || contasSaldos[idConta - 1] < valor || valor <= 0)
-		return -1;
-	if ()
 		return -1;
 	atrasar();
 	contasSaldos[idConta - 1] -= valor;

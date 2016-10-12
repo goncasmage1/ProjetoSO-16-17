@@ -30,7 +30,9 @@ int main (int argc, char** argv) {
 
 	char *args[MAXARGS + 1];
 	char buffer[BUFFER_SIZE];
+	//Guarda o numero de processos filhos criados
 	int index = 0;
+	//Guarda os pids de todos os processos criados
 	pid_t processos[MAXTAREFA];
 
 	inicializarContas();
@@ -49,12 +51,14 @@ int main (int argc, char** argv) {
 			puts("i-banco vai terminar.\n--");
 			int i, pid, status;
 
+			/*Sair agora - chama kill a todos os processos filho*/
 			if (args[1] != NULL && (strcmp(args[1], COMANDO_SAIR_AGORA) == 0)) {
 				for (i = 0; i < index; i++) {
 					kill(processos[i], SIGUSR1);
 				}
 			}
 
+			/*Termina os processos zombie antes de o programa acabar*/
 			for (i = 0; i < index; i++) {
 				pid = wait(&status);
 				printf("FILHO TERMINADO (PID=%d; ", pid);
@@ -130,6 +134,7 @@ int main (int argc, char** argv) {
 		/* Simular */
 		else if (strcmp(args[0], COMANDO_SIMULAR) == 0) {
 			int anos = atoi(args[1]);
+
 			if (anos > 0) {
 				pid_t pid = fork();
 
