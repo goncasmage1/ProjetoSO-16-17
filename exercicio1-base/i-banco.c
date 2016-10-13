@@ -30,9 +30,9 @@ int main (int argc, char** argv) {
 
 	char *args[MAXARGS + 1];
 	char buffer[BUFFER_SIZE];
-	//Guarda o numero de processos filhos criados
+	/*Guarda o numero de processos filhos criados*/
 	int index = 0;
-	//Guarda os pids de todos os processos criados
+	/*Guarda os pids de todos os processos criados*/
 	pid_t processos[MAXTAREFA];
 	signal(SIGUSR1, terminarASAP);
 
@@ -40,7 +40,7 @@ int main (int argc, char** argv) {
 	inicializarContas();
 
 	printf("Bem-vinda/o ao i-banco\n\n");
-	  
+
 	while (1) {
 
 		int numargs;
@@ -137,13 +137,18 @@ int main (int argc, char** argv) {
 		else if (strcmp(args[0], COMANDO_SIMULAR) == 0) {
 			int anos = atoi(args[1]);
 
+			/*Se o numero de anos for valido*/
 			if (anos > 0) {
+				//Cria um processo filho
 				pid_t pid = fork();
 
+				/*O processo filho faz a simulacao*/
 				if (pid == 0) {
 					simular(anos);
 					exit(0);
 				}
+				/*O processo pai adiciona o pid do
+				processo filho ao vetor de pid's */
 				else if (pid > 0){
 					processos[index++] = pid;
 				}
