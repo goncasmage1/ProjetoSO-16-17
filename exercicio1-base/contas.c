@@ -8,7 +8,7 @@
 #define atrasar() sleep(ATRASO)
 			 
 int contasSaldos[NUM_CONTAS];
-bool terminarAgora;
+int terminarAgora;
 
 int contaExiste(int idConta) {
 	return (idConta > 0 && idConta <= NUM_CONTAS);
@@ -47,8 +47,6 @@ int lerSaldo(int idConta) {
 void simular(int numAnos) {
 	int novosSaldos[NUM_CONTAS], i, j, k;
 
-	signal(SIGUSR1, terminarASAP);
-
 	//Copia os saldos das contas para um novo vetor
 	for (k = 1; k <= NUM_CONTAS; k++)
 		novosSaldos[k-1] = lerSaldo(k);
@@ -74,7 +72,7 @@ void simular(int numAnos) {
 }
 
 void terminarASAP() {
-	terminarAgora = true;
+	terminarAgora = 1;
 }
 
 

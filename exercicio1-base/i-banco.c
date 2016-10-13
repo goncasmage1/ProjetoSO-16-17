@@ -34,6 +34,8 @@ int main (int argc, char** argv) {
 	int index = 0;
 	//Guarda os pids de todos os processos criados
 	pid_t processos[MAXTAREFA];
+	signal(SIGUSR1, terminarASAP);
+
 
 	inicializarContas();
 
