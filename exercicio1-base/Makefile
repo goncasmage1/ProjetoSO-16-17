@@ -1,5 +1,5 @@
 main: commandlinereader.o contas.o i-banco.o
-	gcc -o main commandlinereader.o contas.o i-banco.o
+	gcc -pthread -o main commandlinereader.o contas.o i-banco.o
 
 commandlinereader.o : commandlinereader.c commandlinereader.h
 	gcc $(CFLAGS) -c commandlinereader.c
