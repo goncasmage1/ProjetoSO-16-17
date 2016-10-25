@@ -42,9 +42,9 @@ typedef struct
 void novaTarefa(int op, int id, int val);
 /*Funcao executada pelas tarefas*/
 void *recebeComandos();
-void tarefaDebitar();
-void tarefaCreditar();
-void tarefaLerSaldo();
+void tarefaDebitar(comando_t comando);
+void tarefaCreditar(comando_t comando);
+void tarefaLerSaldo(comando_t comando);
 
 char *args[MAXARGS + 1];
 char buffer[BUFFER_SIZE];
@@ -56,19 +56,25 @@ pthread_t tid[NUM_TRABALHADORAS];
 /*Guarda os comandos a executar numa tarefa*/
 comando_t cmd_buffer[CMD_BUFFER_DIM];
 /*Usado como trinco entre as tarefas*/
-pthread_mutex_t mutex;
+pthread_mutex_t mutex_esc, mutex_ler, mutex_contas[NUM_CONTAS];
 /*Usado para coordenar o uso das tarefas*/
 sem_t sem_ler, sem_esc;
+sem_t sem_contas[NUM_CONTAS];
 
 int main (int argc, char** argv) {
 
 	signal(SIGUSR1, terminarASAP);
 	inicializarContas();
-	pthread_mutex_init(&mutex, NULL);
+	pthread_mutex_init(&mutex_ler, NULL);
+	pthread_mutex_init(&mutex_esc, NULL);
 	sem_init(&sem_ler, 0, 0);
 	sem_init(&sem_esc, 0, CMD_BUFFER_DIM);
-
 	int i;
+	for (i = 0; i < NUM_CONTAS; i++) {
+		sem_init(&sem_contas[i], 0, 1);
+		pthread_mutex_init(&mutex_contas[i], NULL);
+	}
+
 	for (i = 0; i < NUM_TRABALHADORAS; i++){
 		if (pthread_create(&tid[i], 0, recebeComandos, NULL) == 0) {
 			puts("Criada uma nova tarefa!");
@@ -152,6 +158,7 @@ int main (int argc, char** argv) {
 
 				/*O processo filho faz a simulacao*/
 				if (pid == 0) {
+					puts("Simulou")
 					simular(anos);
 					exit(0);
 				}
@@ -178,6 +185,7 @@ int main (int argc, char** argv) {
 void novaTarefa(int op, int id, int val) {
 
 	sem_wait(&sem_esc);
+	pthread_mutex_lock(&mutex_esc);
 	puts("Pedido recebido!");
 	cmd_buffer[buff_write_idx].operacao = op;
 	cmd_buffer[buff_write_idx].idConta = id;
@@ -185,6 +193,7 @@ void novaTarefa(int op, int id, int val) {
 	if (++buff_write_idx == CMD_BUFFER_DIM) {
 		buff_write_idx = 0;
 	}
+	pthread_mutex_unlock(&mutex_esc);
 	sem_post(&sem_ler);
 }
 
@@ -192,33 +201,42 @@ void *recebeComandos() {
 
 	while (1) {
 		sem_wait(&sem_ler);
-		pthread_mutex_lock(&mutex);
-		puts("Tarefa desbloqueada!");
-
-		switch (cmd_buffer[buff_read_idx].operacao) {
-			case DEBITAR:
-				tarefaDebitar();
-				break;
-
-			case CREDITAR:
-				tarefaCreditar();
-				break;
-
-			case LER_SALDO:
-				tarefaLerSaldo();
-				break;
-		}
+		pthread_mutex_lock(&mutex_ler);
+		comando_t com = cmd_buffer[buff_read_idx];
+		int conta, op;
+		conta = com.idConta;
+		op = com.operacao;
 		if (++buff_read_idx == CMD_BUFFER_DIM) {
 			buff_read_idx = 0;
 		}
+		pthread_mutex_unlock(&mutex_ler);
 
-		pthread_mutex_unlock(&mutex);
+		sem_wait(&sem_contas[conta]);
+		pthread_mutex_lock(&mutex_contas[conta]);
+		puts("Tarefa desbloqueada!");
+
+		switch (op) {
+			case DEBITAR:
+				tarefaDebitar(com);
+				break;
+
+			case CREDITAR:
+				tarefaCreditar(com);
+				break;
+
+			case LER_SALDO:
+				tarefaLerSaldo(com);
+				break;
+		}
+		pthread_mutex_unlock(&mutex_contas[conta]);
+		sem_post(&sem_contas[conta]);
+
 		sem_post(&sem_esc);
 	}
 }
 
-void tarefaDebitar() {
-	comando_t com = cmd_buffer[buff_read_idx];
+void tarefaDebitar(comando_t comando) {
+	comando_t com = comando;
 	
 	if (debitar (com.idConta, com.valor) < 0)
 		printf("%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, com.idConta, com.valor);
@@ -226,8 +244,8 @@ void tarefaDebitar() {
 		printf("%s(%d, %d): OK\n\n", COMANDO_DEBITAR, com.idConta, com.valor);
 }
 
-void tarefaCreditar() {
-	comando_t com = cmd_buffer[buff_read_idx];
+void tarefaCreditar(comando_t comando) {
+	comando_t com = comando;
 
 	if (creditar (com.idConta, com.valor) < 0)
 		printf("%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, com.idConta, com.valor);
@@ -235,8 +253,8 @@ void tarefaCreditar() {
 		printf("%s(%d, %d): OK\n\n", COMANDO_CREDITAR, com.idConta, com.valor);
 }
 
-void tarefaLerSaldo() {
-	comando_t com = cmd_buffer[buff_read_idx];
+void tarefaLerSaldo(comando_t comando) {
+	comando_t com = comando;
 
 	int saldo = lerSaldo(com.idConta);
 	if (saldo < 0)
