@@ -70,6 +70,7 @@ int main (int argc, char** argv) {
 	sem_init(&sem_ler, 0, 0);
 	sem_init(&sem_esc, 0, CMD_BUFFER_DIM);
 	int i;
+
 	for (i = 0; i < NUM_CONTAS; i++) {
 		sem_init(&sem_contas[i], 0, 1);
 		pthread_mutex_init(&mutex_contas[i], NULL);
@@ -100,7 +101,12 @@ int main (int argc, char** argv) {
 			para_sair = 1;
 
 			for (i = 0; i < NUM_TRABALHADORAS; i++) {
-				pthread_join(&tid[i], NULL)
+				sem_post(&sem_ler);
+			}
+
+			for (i = 0; i < NUM_TRABALHADORAS; i++) {
+				pthread_join(tid[i], NULL);
+				puts("Continua");
 			}
 
 			/*Sair agora - chama kill a todos os processos filho*/
@@ -205,6 +211,9 @@ void *recebeComandos() {
 
 	while (!para_sair) {
 		sem_wait(&sem_ler);
+		if (para_sair) {
+			return NULL;
+		}
 		pthread_mutex_lock(&mutex_ler);
 
 		comando_t com = cmd_buffer[buff_read_idx];
