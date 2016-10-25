@@ -46,6 +46,7 @@ void tarefaDebitar(comando_t comando);
 void tarefaCreditar(comando_t comando);
 void tarefaLerSaldo(comando_t comando);
 
+/*VARIAVEIS GLOBAIS*/
 char *args[MAXARGS + 1];
 char buffer[BUFFER_SIZE];
 int indice = 0, buff_write_idx = 0, buff_read_idx = 0, written = 0, para_sair = 0;
@@ -55,11 +56,11 @@ pid_t processos[MAXTAREFA];
 pthread_t tid[NUM_TRABALHADORAS];
 /*Guarda os comandos a executar numa tarefa*/
 comando_t cmd_buffer[CMD_BUFFER_DIM];
-/*Usado como trinco entre as tarefas*/
+/*Trincos*/
 pthread_mutex_t mutex_esc, mutex_ler, mutex_contas[NUM_CONTAS];
-/*Usado para coordenar o uso das tarefas*/
-sem_t sem_ler, sem_esc;
-sem_t sem_contas[NUM_CONTAS];
+/*Semaforos*/
+sem_t sem_ler, sem_esc, sem_contas[NUM_CONTAS];
+/*VARIAVEIS GLOBAIS*/
 
 int main (int argc, char** argv) {
 
@@ -69,17 +70,19 @@ int main (int argc, char** argv) {
 	pthread_mutex_init(&mutex_esc, NULL);
 	sem_init(&sem_ler, 0, 0);
 	sem_init(&sem_esc, 0, CMD_BUFFER_DIM);
-	int i;
 
+	int i;
 	for (i = 0; i < NUM_CONTAS; i++) {
 		sem_init(&sem_contas[i], 0, 1);
 		pthread_mutex_init(&mutex_contas[i], NULL);
 	}
-
 	for (i = 0; i < NUM_TRABALHADORAS; i++){
 		if (pthread_create(&tid[i], 0, recebeComandos, NULL) == 0) {
-			puts("Criada uma nova tarefa!");
-		}	
+
+		}
+		else {
+			puts("Erro a criar tarefa!");
+		}
 	}
 
 	printf("Bem-vinda/o ao i-banco\n\n");
@@ -100,10 +103,11 @@ int main (int argc, char** argv) {
 			int i, pid, status;
 			para_sair = 1;
 
+			//Forca todas as tarefas bloqueadas a avancar e terminarem-se
 			for (i = 0; i < NUM_TRABALHADORAS; i++) {
 				sem_post(&sem_ler);
 			}
-
+			//Certifica-se de que todas as tarefas terminaram
 			for (i = 0; i < NUM_TRABALHADORAS; i++) {
 				pthread_join(tid[i], NULL);
 			}
@@ -194,28 +198,33 @@ int main (int argc, char** argv) {
 
 void novaTarefa(int op, int id, int val) {
 
+	//Decrementa o semaforo de escrita
 	sem_wait(&sem_esc);
 	pthread_mutex_lock(&mutex_esc);
 
-	puts("Pedido recebido!");
+	//Adiciona os dados ao buffer
 	cmd_buffer[buff_write_idx].operacao = op;
 	cmd_buffer[buff_write_idx].idConta = id;
 	cmd_buffer[buff_write_idx].valor = val;
 	buff_write_idx = (buff_write_idx + 1) % CMD_BUFFER_DIM;
 
 	pthread_mutex_unlock(&mutex_esc);
+	//Indica que pode ler
 	sem_post(&sem_ler);
 }
 
 void *recebeComandos() {
 
 	while (!para_sair) {
+		//Verifica se pode ler
 		sem_wait(&sem_ler);
+		//Verifica se deve sair
 		if (para_sair) {
 			return NULL;
 		}
 		pthread_mutex_lock(&mutex_ler);
 
+		//Le o comando do buffer que vai ser processado
 		comando_t com = cmd_buffer[buff_read_idx];
 		int conta, op;
 		conta = com.idConta;
@@ -223,10 +232,10 @@ void *recebeComandos() {
 		buff_read_idx = (buff_read_idx + 1) % CMD_BUFFER_DIM;
 
 		pthread_mutex_unlock(&mutex_ler);
+
+		//Verifica se essa conta nao esta a ser acedida por outra tarefa
 		sem_wait(&sem_contas[conta]);
 		pthread_mutex_lock(&mutex_contas[conta]);
-
-		puts("Tarefa desbloqueada!");
 
 		switch (op) {
 			case DEBITAR:
@@ -244,7 +253,7 @@ void *recebeComandos() {
 		
 		pthread_mutex_unlock(&mutex_contas[conta]);
 		sem_post(&sem_contas[conta]);
-
+		//Notifica que ja processou o pedido do buffer
 		sem_post(&sem_esc);
 	}
 	return NULL;
