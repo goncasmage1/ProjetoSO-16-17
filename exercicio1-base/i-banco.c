@@ -56,7 +56,7 @@ pthread_t tid[NUM_TRABALHADORAS];
 /*Guarda os comandos a executar numa tarefa*/
 comando_t cmd_buffer[CMD_BUFFER_DIM];
 /*Usado como trinco entre as tarefas*/
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex;
 /*Usado para coordenar o uso das tarefas*/
 sem_t sem_ler, sem_esc;
 
@@ -66,7 +66,7 @@ int main (int argc, char** argv) {
 	inicializarContas();
 	pthread_mutex_init(&mutex, NULL);
 	sem_init(&sem_ler, 0, 0);
-	sem_init(&sem_esc, 0, 6);
+	sem_init(&sem_esc, 0, CMD_BUFFER_DIM);
 
 	int i;
 	for (i = 0; i < NUM_TRABALHADORAS; i++){
