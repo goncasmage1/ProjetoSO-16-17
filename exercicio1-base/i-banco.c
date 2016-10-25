@@ -48,7 +48,7 @@ void tarefaLerSaldo(comando_t comando);
 
 char *args[MAXARGS + 1];
 char buffer[BUFFER_SIZE];
-int indice = 0, buff_write_idx = 0, buff_read_idx = 0, written = 0;
+int indice = 0, buff_write_idx = 0, buff_read_idx = 0, written = 0, para_sair = 0;
 /*Guarda os pids de todos os processos criados*/
 pid_t processos[MAXTAREFA];
 /*Guarda a pool de tarefas a usar no programa*/
@@ -97,6 +97,11 @@ int main (int argc, char** argv) {
 
 			puts("i-banco vai terminar.\n--");
 			int i, pid, status;
+			para_sair = 1;
+
+			for (i = 0; i < NUM_TRABALHADORAS; i++) {
+				pthread_join(&tid[i], NULL)
+			}
 
 			/*Sair agora - chama kill a todos os processos filho*/
 			if (args[1] != NULL && (strcmp(args[1], COMANDO_SAIR_AGORA) == 0)) {
@@ -158,7 +163,6 @@ int main (int argc, char** argv) {
 
 				/*O processo filho faz a simulacao*/
 				if (pid == 0) {
-					puts("Simulou")
 					simular(anos);
 					exit(0);
 				}
@@ -186,33 +190,33 @@ void novaTarefa(int op, int id, int val) {
 
 	sem_wait(&sem_esc);
 	pthread_mutex_lock(&mutex_esc);
+
 	puts("Pedido recebido!");
 	cmd_buffer[buff_write_idx].operacao = op;
 	cmd_buffer[buff_write_idx].idConta = id;
 	cmd_buffer[buff_write_idx].valor = val;
-	if (++buff_write_idx == CMD_BUFFER_DIM) {
-		buff_write_idx = 0;
-	}
+	buff_write_idx = (buff_write_idx + 1) % CMD_BUFFER_DIM;
+
 	pthread_mutex_unlock(&mutex_esc);
 	sem_post(&sem_ler);
 }
 
 void *recebeComandos() {
 
-	while (1) {
+	while (!para_sair) {
 		sem_wait(&sem_ler);
 		pthread_mutex_lock(&mutex_ler);
+
 		comando_t com = cmd_buffer[buff_read_idx];
 		int conta, op;
 		conta = com.idConta;
 		op = com.operacao;
-		if (++buff_read_idx == CMD_BUFFER_DIM) {
-			buff_read_idx = 0;
-		}
-		pthread_mutex_unlock(&mutex_ler);
+		buff_read_idx = (buff_read_idx + 1) % CMD_BUFFER_DIM;
 
+		pthread_mutex_unlock(&mutex_ler);
 		sem_wait(&sem_contas[conta]);
 		pthread_mutex_lock(&mutex_contas[conta]);
+
 		puts("Tarefa desbloqueada!");
 
 		switch (op) {
@@ -228,11 +232,13 @@ void *recebeComandos() {
 				tarefaLerSaldo(com);
 				break;
 		}
+		
 		pthread_mutex_unlock(&mutex_contas[conta]);
 		sem_post(&sem_contas[conta]);
 
 		sem_post(&sem_esc);
 	}
+	return NULL;
 }
 
 void tarefaDebitar(comando_t comando) {
