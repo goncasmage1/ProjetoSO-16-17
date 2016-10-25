@@ -106,7 +106,6 @@ int main (int argc, char** argv) {
 
 			for (i = 0; i < NUM_TRABALHADORAS; i++) {
 				pthread_join(tid[i], NULL);
-				puts("Continua");
 			}
 
 			/*Sair agora - chama kill a todos os processos filho*/
@@ -128,6 +127,7 @@ int main (int argc, char** argv) {
 				}
 			}
 			puts("--\ni-banco terminou.");
+			return 0;
 		}
 			
 		/* Debitar */
