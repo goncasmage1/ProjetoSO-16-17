@@ -106,7 +106,7 @@ pthread_mutex_t mutex_esc, mutex_ler, mutex_contas[NUM_CONTAS];
 	1 semaforo de leitura
 	1 semaforo de escritura
 	N semaforos para cada uma das contas*/
-sem_t sem_ler, sem_esc, Wsem_contas[NUM_CONTAS];
+sem_t sem_ler, sem_esc, sem_contas[NUM_CONTAS];
 
 /**Variaveis globais*/
 
@@ -125,11 +125,13 @@ int main (int argc, char** argv) {
 		sem_init(&sem_contas[i], 0, 1);
 		pthread_mutex_init(&mutex_contas[i], NULL);
 	}
-
 	for (i = 0; i < NUM_TRABALHADORAS; i++){
 		if (pthread_create(&tid[i], 0, recebeComandos, NULL) == 0) {
-			puts("Criada uma nova tarefa!");
-		}	
+
+		}
+		else {
+			puts("Erro a criar tarefa!");
+		}
 	}
 	/*Inicializacoes*/
 
@@ -151,11 +153,11 @@ int main (int argc, char** argv) {
 			int i, pid, status;
 			para_sair = 1;
 
-			/*Forca todas as tarefas a avancar e acabarem a sua execucao*/
+			/*Forca todas as tarefas bloqueadas a avancar e terminarem-se*/
 			for (i = 0; i < NUM_TRABALHADORAS; i++) {
 				sem_post(&sem_ler);
 			}
-			/*Destroi todas as tarefas*/
+			/*Certifica-se de que todas as tarefas terminaram*/
 			for (i = 0; i < NUM_TRABALHADORAS; i++) {
 				pthread_join(tid[i], NULL);
 			}
@@ -299,28 +301,28 @@ void *recebeComandos() {
 		
 		pthread_mutex_unlock(&mutex_contas[conta]);
 		sem_post(&sem_contas[conta]);
-		/*Incrementa o semaforo de escrita (Indica que o buffer tem mais um espaco livre)*/
+			/*Incrementa o semaforo de escrita (Indica que o buffer tem mais um espaco livre)*/
 		sem_post(&sem_esc);
 	}
 	return NULL;
 }
 
 void tarefaDebitar(comando_t comando) {
-	if (debitar (com.idConta, com.valor) < 0)
+	if (debitar (comando.idConta, comando.valor) < 0)
 		printf("%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, comando.idConta, comando.valor);
 	else
 		printf("%s(%d, %d): OK\n\n", COMANDO_DEBITAR, comando.idConta, comando.valor);
 }
 
 void tarefaCreditar(comando_t comando) {
-	if (creditar (com.idConta, com.valor) < 0)
+	if (creditar (comando.idConta, comando.valor) < 0)
 		printf("%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, comando.idConta, comando.valor);
 	else
 		printf("%s(%d, %d): OK\n\n", COMANDO_CREDITAR, comando.idConta, comando.valor);
 }
 
 void tarefaLerSaldo(comando_t comando) {
-	int saldo = lerSaldo(com.idConta);
+	int saldo = lerSaldo(comando.idConta);
 	if (saldo < 0)
 		printf("%s(%d): Erro.\n\n", COMANDO_LER_SALDO, comando.idConta);
 	else
