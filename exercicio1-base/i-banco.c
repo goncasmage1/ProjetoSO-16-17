@@ -31,6 +31,7 @@
 #define NUM_TRABALHADORAS 3
 #define CMD_BUFFER_DIM  (NUM_TRABALHADORAS * 2)
 
+/*struct que representa um comando introduzido pelo utilizador*/
 typedef struct
 {
 	int operacao;
@@ -38,39 +39,88 @@ typedef struct
 	int valor;
 } comando_t;
 
-/*Adiciona um novo comando ao buffer*/
+/*********************************************************************
+*	novaTarefa(int op, int id, int val):
+*
+*	Descricao:	Cria um novo comando_t baseado nas informacoes passadas
+*				e insere-o no buffer
+*	Parametros: op -	O numero da operacao associado a uma das tres
+*						operacoes (debitar, creditar e lerSaldo)
+*				id -	O ID da conta introduzida
+*				val -	O valor introduzido para ser usado na operacao
+*	Returns: 	void
+**********************************************************************/
 void novaTarefa(int op, int id, int val);
-/*Funcao executada pelas tarefas*/
+/*********************************************************************
+*	recebeComandos():
+*
+*	Descricao:	Funcao usada pelas tarefas, recebe comandos do buffer
+*	Parametros: Nenhum
+*	Returns: 	void
+**********************************************************************/
 void *recebeComandos();
+/*********************************************************************
+*	tarefaDebitar(comando_t comando):
+*
+*	Descricao:	Funcao chamada pela tarefa ao executar o comando "debitar"
+*	Parametros: comando -	Informacoes sobre o comando a processar
+*	Returns: 	void
+**********************************************************************/
 void tarefaDebitar(comando_t comando);
+/*********************************************************************
+*	tarefaCreditar(comando_t comando):
+*
+*	Descricao : Funcao chamada pela tarefa ao executar o comando "creditar"
+*	Parametros: comando -	Informacoes sobre o comando a processar
+*	Returns: 	void
+**********************************************************************/
 void tarefaCreditar(comando_t comando);
+/*********************************************************************
+*	tarefaLerSaldo(comando_t comando):
+*
+*	Descricao : Funcao chamada pela tarefa ao executar o comando "lerSaldo"
+*	Parametros: comando -	Informacoes sobre o comando a processar
+*	Returns: 	void
+**********************************************************************/
 void tarefaLerSaldo(comando_t comando);
+
+/**Variaveis globais*/
 
 char *args[MAXARGS + 1];
 char buffer[BUFFER_SIZE];
-int indice = 0, buff_write_idx = 0, buff_read_idx = 0, written = 0, para_sair = 0;
+int indice = 0, buff_write_idx = 0, buff_read_idx = 0;
+//Indica as tarefas que devem acabar assim que possivel
+int para_sair = 0;
 /*Guarda os pids de todos os processos criados*/
 pid_t processos[MAXTAREFA];
 /*Guarda a pool de tarefas a usar no programa*/
 pthread_t tid[NUM_TRABALHADORAS];
-/*Guarda os comandos a executar numa tarefa*/
+/*Vetor de comandos que guarda os comandos a executar numa tarefa*/
 comando_t cmd_buffer[CMD_BUFFER_DIM];
-/*Usado como trinco entre as tarefas*/
+/*Declaracao de mutexes (trincos)
+	1 trinco de escrita
+	1 trinco de leitura
+	N trincos para cada uma das contas*/
 pthread_mutex_t mutex_esc, mutex_ler, mutex_contas[NUM_CONTAS];
-/*Usado para coordenar o uso das tarefas*/
-sem_t sem_ler, sem_esc;
-sem_t sem_contas[NUM_CONTAS];
+/*Declaracao de semaforos
+	1 semaforo de leitura
+	1 semaforo de escritura
+	N semaforos para cada uma das contas*/
+sem_t sem_ler, sem_esc, Wsem_contas[NUM_CONTAS];
+
+/**Variaveis globais*/
 
 int main (int argc, char** argv) {
 
+	/*Inicializacoes*/
 	signal(SIGUSR1, terminarASAP);
 	inicializarContas();
 	pthread_mutex_init(&mutex_ler, NULL);
 	pthread_mutex_init(&mutex_esc, NULL);
 	sem_init(&sem_ler, 0, 0);
 	sem_init(&sem_esc, 0, CMD_BUFFER_DIM);
-	int i;
 
+	int i;
 	for (i = 0; i < NUM_CONTAS; i++) {
 		sem_init(&sem_contas[i], 0, 1);
 		pthread_mutex_init(&mutex_contas[i], NULL);
@@ -81,6 +131,7 @@ int main (int argc, char** argv) {
 			puts("Criada uma nova tarefa!");
 		}	
 	}
+	/*Inicializacoes*/
 
 	printf("Bem-vinda/o ao i-banco\n\n");
 
@@ -100,10 +151,11 @@ int main (int argc, char** argv) {
 			int i, pid, status;
 			para_sair = 1;
 
+			/*Forca todas as tarefas a avancar e acabarem a sua execucao*/
 			for (i = 0; i < NUM_TRABALHADORAS; i++) {
 				sem_post(&sem_ler);
 			}
-
+			/*Destroi todas as tarefas*/
 			for (i = 0; i < NUM_TRABALHADORAS; i++) {
 				pthread_join(tid[i], NULL);
 			}
@@ -136,7 +188,7 @@ int main (int argc, char** argv) {
 			if (numargs < 3) {
 				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_DEBITAR);
 				continue;
-			}			
+			}
 			novaTarefa(DEBITAR, atoi(args[1]), atoi(args[2]));
 		}
 
@@ -164,7 +216,7 @@ int main (int argc, char** argv) {
 
 			/*Se o numero de anos for valido*/
 			if (anos > 0) {
-				//Cria um processo filho
+				/*Cria um processo filho*/
 				pid_t pid = fork();
 
 				/*O processo filho faz a simulacao*/
@@ -188,34 +240,38 @@ int main (int argc, char** argv) {
 			printf("Comando desconhecido. Tente de novo.\n");
 		}
 	}
-	pthread_join(tid[0], NULL);
 	return 0;
 }
 
 void novaTarefa(int op, int id, int val) {
 
+	/*Decrementa o semaforo de escrita (Indica que o buffer tem menos um espaco livre)*/
 	sem_wait(&sem_esc);
 	pthread_mutex_lock(&mutex_esc);
 
-	puts("Pedido recebido!");
+	/*Adiciona um comando ao buffer*/
 	cmd_buffer[buff_write_idx].operacao = op;
 	cmd_buffer[buff_write_idx].idConta = id;
 	cmd_buffer[buff_write_idx].valor = val;
 	buff_write_idx = (buff_write_idx + 1) % CMD_BUFFER_DIM;
 
 	pthread_mutex_unlock(&mutex_esc);
+	/*Incrementa o semaforo de leitura (Permite que uma tarefa leia do buffer)*/
 	sem_post(&sem_ler);
 }
 
 void *recebeComandos() {
 
 	while (!para_sair) {
+		/*Decrementa o semaforo de leitura (Espera para que possa ler do buffer)*/
 		sem_wait(&sem_ler);
+		/*Retorna se o utilizador introduziu o comando sair*/
 		if (para_sair) {
 			return NULL;
 		}
 		pthread_mutex_lock(&mutex_ler);
 
+		/*Le o comando do buffer*/
 		comando_t com = cmd_buffer[buff_read_idx];
 		int conta, op;
 		conta = com.idConta;
@@ -223,10 +279,9 @@ void *recebeComandos() {
 		buff_read_idx = (buff_read_idx + 1) % CMD_BUFFER_DIM;
 
 		pthread_mutex_unlock(&mutex_ler);
+		/*Verifica se a conta especificada nao esta a ser acedida*/
 		sem_wait(&sem_contas[conta]);
 		pthread_mutex_lock(&mutex_contas[conta]);
-
-		puts("Tarefa desbloqueada!");
 
 		switch (op) {
 			case DEBITAR:
@@ -244,36 +299,30 @@ void *recebeComandos() {
 		
 		pthread_mutex_unlock(&mutex_contas[conta]);
 		sem_post(&sem_contas[conta]);
-
+		/*Incrementa o semaforo de escrita (Indica que o buffer tem mais um espaco livre)*/
 		sem_post(&sem_esc);
 	}
 	return NULL;
 }
 
 void tarefaDebitar(comando_t comando) {
-	comando_t com = comando;
-	
 	if (debitar (com.idConta, com.valor) < 0)
-		printf("%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, com.idConta, com.valor);
+		printf("%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, comando.idConta, comando.valor);
 	else
-		printf("%s(%d, %d): OK\n\n", COMANDO_DEBITAR, com.idConta, com.valor);
+		printf("%s(%d, %d): OK\n\n", COMANDO_DEBITAR, comando.idConta, comando.valor);
 }
 
 void tarefaCreditar(comando_t comando) {
-	comando_t com = comando;
-
 	if (creditar (com.idConta, com.valor) < 0)
-		printf("%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, com.idConta, com.valor);
+		printf("%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, comando.idConta, comando.valor);
 	else
-		printf("%s(%d, %d): OK\n\n", COMANDO_CREDITAR, com.idConta, com.valor);
+		printf("%s(%d, %d): OK\n\n", COMANDO_CREDITAR, comando.idConta, comando.valor);
 }
 
 void tarefaLerSaldo(comando_t comando) {
-	comando_t com = comando;
-
 	int saldo = lerSaldo(com.idConta);
 	if (saldo < 0)
-		printf("%s(%d): Erro.\n\n", COMANDO_LER_SALDO, com.idConta);
+		printf("%s(%d): Erro.\n\n", COMANDO_LER_SALDO, comando.idConta);
 	else
-		printf("%s(%d): O saldo da conta é %d.\n\n", COMANDO_LER_SALDO, com.idConta, saldo);
+		printf("%s(%d): O saldo da conta é %d.\n\n", COMANDO_LER_SALDO, comando.idConta, saldo);
 }
