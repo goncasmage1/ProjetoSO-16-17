@@ -17,6 +17,7 @@ int contaExiste(int idConta);
 int debitar(int idConta, int valor);
 int creditar(int idConta, int valor);
 int lerSaldo(int idConta);
+int transferir(int idConta_1, int idConta_2, int valor);
 void simular(int numAnos);
 /*Ativa uma bool que indica que o
 processo deve terminar assim que possivel*/

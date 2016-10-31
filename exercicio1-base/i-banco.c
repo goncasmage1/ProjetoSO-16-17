@@ -17,6 +17,7 @@
 #define COMANDO_DEBITAR "debitar"
 #define COMANDO_CREDITAR "creditar"
 #define COMANDO_LER_SALDO "lerSaldo"
+#define COMANDO_TRANSFERIR "transferir"
 #define COMANDO_SIMULAR "simular"
 #define COMANDO_SAIR "sair"
 #define COMANDO_SAIR_AGORA "agora"
@@ -24,8 +25,9 @@
 #define DEBITAR 1
 #define CREDITAR 2
 #define LER_SALDO 3
+#define TRANSFERIR 4
 
-#define MAXARGS 3
+#define MAXARGS 4
 #define BUFFER_SIZE 100
 #define MAXTAREFA 20
 #define NUM_TRABALHADORAS 3
@@ -35,7 +37,8 @@
 typedef struct
 {
 	int operacao;
-	int idConta;
+	int idConta_1;
+	int idConta_2;
 	int valor;
 } comando_t;
 
@@ -50,7 +53,7 @@ typedef struct
 *				val -	O valor introduzido para ser usado na operacao
 *	Returns: 	void
 **********************************************************************/
-void novaTarefa(int op, int id, int val);
+void novaTarefa(int op, int id_1, int id_2, int val);
 /*********************************************************************
 *	recebeComandos():
 *
@@ -83,6 +86,15 @@ void tarefaCreditar(comando_t comando);
 *	Returns: 	void
 **********************************************************************/
 void tarefaLerSaldo(comando_t comando);
+
+/*********************************************************************
+*	tarefaTransferir(comando_t comando):
+*
+*	Descricao : Funcao chamada pela tarefa ao executar o comando "transferir"
+*	Parametros: comando -	Informacoes sobre o comando a processar
+*	Returns: 	void
+**********************************************************************/
+void tarefaTransferir(comando_t comando);
 
 /**Variaveis globais*/
 
@@ -191,7 +203,7 @@ int main (int argc, char** argv) {
 				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_DEBITAR);
 				continue;
 			}
-			novaTarefa(DEBITAR, atoi(args[1]), atoi(args[2]));
+			novaTarefa(DEBITAR, atoi(args[1]), -1, atoi(args[2]));
 		}
 
 		/* Creditar */
@@ -200,7 +212,7 @@ int main (int argc, char** argv) {
 				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_CREDITAR);
 				continue;
 			}
-			novaTarefa(CREDITAR, atoi(args[1]), atoi(args[2]));
+			novaTarefa(CREDITAR, atoi(args[1]), -1, atoi(args[2]));
 		}
 
 		/* Ler Saldo */
@@ -209,7 +221,16 @@ int main (int argc, char** argv) {
 				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_LER_SALDO);
 				continue;
 			}
-			novaTarefa(LER_SALDO, atoi(args[1]), -1);
+			novaTarefa(LER_SALDO, atoi(args[1]), -1, -1);
+		}
+
+		/* Transferir */
+		else if (strcmp(args[0], COMANDO_TRANSFERIR) == 0) {
+			if (numargs < 4) {
+				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_TRANSFERIR);
+				continue;
+			}
+			novaTarefa(TRANSFERIR, atoi(args[1]), atoi(args[2]), atoi(args[3]));
 		}
 
 		/* Simular */
@@ -245,7 +266,7 @@ int main (int argc, char** argv) {
 	return 0;
 }
 
-void novaTarefa(int op, int id, int val) {
+void novaTarefa(int op, int id_1, int id_2, int val) {
 
 	/*Decrementa o semaforo de escrita (Indica que o buffer tem menos um espaco livre)*/
 	sem_wait(&sem_esc);
@@ -253,7 +274,8 @@ void novaTarefa(int op, int id, int val) {
 
 	/*Adiciona um comando ao buffer*/
 	cmd_buffer[buff_write_idx].operacao = op;
-	cmd_buffer[buff_write_idx].idConta = id;
+	cmd_buffer[buff_write_idx].idConta_1 = id_1;
+	cmd_buffer[buff_write_idx].idConta_2 = id_2;
 	cmd_buffer[buff_write_idx].valor = val;
 	buff_write_idx = (buff_write_idx + 1) % CMD_BUFFER_DIM;
 
@@ -276,7 +298,7 @@ void *recebeComandos() {
 		/*Le o comando do buffer*/
 		comando_t com = cmd_buffer[buff_read_idx];
 		int conta, op;
-		conta = com.idConta;
+		conta = com.idConta_1;
 		op = com.operacao;
 		buff_read_idx = (buff_read_idx + 1) % CMD_BUFFER_DIM;
 
@@ -297,6 +319,10 @@ void *recebeComandos() {
 			case LER_SALDO:
 				tarefaLerSaldo(com);
 				break;
+
+			case TRANSFERIR:
+				tarefaTransferir(com);
+				break;
 		}
 		
 		pthread_mutex_unlock(&mutex_contas[conta]);
@@ -308,23 +334,32 @@ void *recebeComandos() {
 }
 
 void tarefaDebitar(comando_t comando) {
-	if (debitar (comando.idConta, comando.valor) < 0)
-		printf("%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, comando.idConta, comando.valor);
+	if (debitar (comando.idConta_1, comando.valor) < 0)
+		printf("%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
 	else
-		printf("%s(%d, %d): OK\n\n", COMANDO_DEBITAR, comando.idConta, comando.valor);
+		printf("%s(%d, %d): OK\n\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
 }
 
 void tarefaCreditar(comando_t comando) {
-	if (creditar (comando.idConta, comando.valor) < 0)
-		printf("%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, comando.idConta, comando.valor);
+	if (creditar (comando.idConta_1, comando.valor) < 0)
+		printf("%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
 	else
-		printf("%s(%d, %d): OK\n\n", COMANDO_CREDITAR, comando.idConta, comando.valor);
+		printf("%s(%d, %d): OK\n\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
 }
 
 void tarefaLerSaldo(comando_t comando) {
-	int saldo = lerSaldo(comando.idConta);
+	int saldo = lerSaldo(comando.idConta_1);
 	if (saldo < 0)
-		printf("%s(%d): Erro.\n\n", COMANDO_LER_SALDO, comando.idConta);
+		printf("%s(%d): Erro.\n\n", COMANDO_LER_SALDO, comando.idConta_1);
 	else
-		printf("%s(%d): O saldo da conta é %d.\n\n", COMANDO_LER_SALDO, comando.idConta, saldo);
+		printf("%s(%d): O saldo da conta é %d.\n\n", COMANDO_LER_SALDO, comando.idConta_1, saldo);
+}
+
+void tarefaTransferir(comando_t comando) {
+	if (transferir(comando.idConta_1, comando.idConta_2, comando.valor) < 0) {
+		printf("Erro ao transferir %d da conta %d para a conta %d.", comando.valor, comando.idConta_1, comando.idConta_2);
+	}
+	else {
+		printf("%s(%d, %d, %d): OK\n\n", COMANDO_TRANSFERIR, comando.idConta_1, comando.idConta_2, comando.valor);
+	}
 }
