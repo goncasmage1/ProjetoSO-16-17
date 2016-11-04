@@ -12,6 +12,7 @@ int terminarAgora;
 
 int contaExiste(int idConta) {
 	return (idConta > 0 && idConta <= NUM_CONTAS);
+	puts("Conta Existiu");
 }
 
 void inicializarContas() {
@@ -48,6 +49,7 @@ int transferir(int idConta_1, int idConta_2, int valor) {
 	atrasar();
 	if (contaExiste(idConta_1) &&
 		contaExiste(idConta_2) &&
+		idConta_1 != idConta_2 &&
 		contasSaldos[idConta_1] >= valor) {
 
 		contasSaldos[idConta_1] -= valor;

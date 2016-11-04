@@ -40,20 +40,24 @@ typedef struct
 	int idConta_1;
 	int idConta_2;
 	int valor;
+	/*Indica se precisamos de considerar o valor da conta 2*/
+	int com_conta_2;
 } comando_t;
 
 /*********************************************************************
 *	novaTarefa(int op, int id, int val):
-*
+*comando
 *	Descricao:	Cria um novo comando_t baseado nas informacoes passadas
 *				e insere-o no buffer
 *	Parametros: op -	O numero da operacao associado a uma das tres
 *						operacoes (debitar, creditar e lerSaldo)
 *				id -	O ID da conta introduzida
 *				val -	O valor introduzido para ser usado na operacao
+*				duas_contas - Indica se o valor da segunda conta
+								deve ser considerado
 *	Returns: 	void
 **********************************************************************/
-void novaTarefa(int op, int id_1, int id_2, int val);
+void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas);
 /*********************************************************************
 *	recebeComandos():
 *
@@ -101,19 +105,22 @@ void tarefaTransferir(comando_t comando);
 char *args[MAXARGS + 1];
 char buffer[BUFFER_SIZE];
 int indice = 0, buff_write_idx = 0, buff_read_idx = 0;
-//Indica as tarefas que devem acabar assim que possivel
-int para_sair = 0;
+/*"Booleans"*/
+int para_sair = 0, espera = 0;
 /*Guarda os pids de todos os processos criados*/
 pid_t processos[MAXTAREFA];
 /*Guarda a pool de tarefas a usar no programa*/
 pthread_t tid[NUM_TRABALHADORAS];
+/*Condicoes para sincronizar as tarefas e as simulacoes*/
+pthread_cond_t pode_simular, espera_simular;
 /*Vetor de comandos que guarda os comandos a executar numa tarefa*/
 comando_t cmd_buffer[CMD_BUFFER_DIM];
 /*Declaracao de mutexes (trincos)
 	1 trinco de escrita
 	1 trinco de leitura
+	1 trinco de condicao
 	N trincos para cada uma das contas*/
-pthread_mutex_t mutex_esc, mutex_ler, mutex_contas[NUM_CONTAS];
+pthread_mutex_t mutex_esc, mutex_ler, mutex_cond, mutex_contas[NUM_CONTAS];
 /*Declaracao de semaforos
 	1 semaforo de leitura
 	1 semaforo de escritura
@@ -129,6 +136,9 @@ int main (int argc, char** argv) {
 	inicializarContas();
 	pthread_mutex_init(&mutex_ler, NULL);
 	pthread_mutex_init(&mutex_esc, NULL);
+	pthread_mutex_init(&mutex_cond, NULL);
+	pthread_cond_init(&pode_simular, NULL);
+	pthread_cond_init(&espera_simular, NULL);
 	sem_init(&sem_ler, 0, 0);
 	sem_init(&sem_esc, 0, CMD_BUFFER_DIM);
 
@@ -203,7 +213,7 @@ int main (int argc, char** argv) {
 				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_DEBITAR);
 				continue;
 			}
-			novaTarefa(DEBITAR, atoi(args[1]), -1, atoi(args[2]));
+			novaTarefa(DEBITAR, atoi(args[1]), -1, atoi(args[2]), 0);
 		}
 
 		/* Creditar */
@@ -212,7 +222,7 @@ int main (int argc, char** argv) {
 				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_CREDITAR);
 				continue;
 			}
-			novaTarefa(CREDITAR, atoi(args[1]), -1, atoi(args[2]));
+			novaTarefa(CREDITAR, atoi(args[1]), -1, atoi(args[2]), 0);
 		}
 
 		/* Ler Saldo */
@@ -221,7 +231,7 @@ int main (int argc, char** argv) {
 				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_LER_SALDO);
 				continue;
 			}
-			novaTarefa(LER_SALDO, atoi(args[1]), -1, -1);
+			novaTarefa(LER_SALDO, atoi(args[1]), -1, -1, 0);
 		}
 
 		/* Transferir */
@@ -230,15 +240,23 @@ int main (int argc, char** argv) {
 				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_TRANSFERIR);
 				continue;
 			}
-			novaTarefa(TRANSFERIR, atoi(args[1]), atoi(args[2]), atoi(args[3]));
+			novaTarefa(TRANSFERIR, atoi(args[1]), atoi(args[2]), atoi(args[3]), 1);
 		}
 
 		/* Simular */
 		else if (strcmp(args[0], COMANDO_SIMULAR) == 0) {
+
+
 			int anos = atoi(args[1]);
 
 			/*Se o numero de anos for valido*/
 			if (anos > 0) {
+
+				/*Indica que ha uma simulacao a espera e aguarda que
+				todas as tarefas que estao a ser executadas terminem*/
+				espera = 1;
+				pthread_cond_wait(&pode_simular, &mutex_cond);
+
 				/*Cria um processo filho*/
 				pid_t pid = fork();
 
@@ -251,6 +269,10 @@ int main (int argc, char** argv) {
 				processo filho ao vetor de pid's */
 				else if (pid > 0){
 					processos[indice++] = pid;
+
+					/*Indica que as tarefas podem resumir as operacoes*/
+					espera = 0;
+					pthread_cond_signal(&espera_simular);
 				}
 				else {
 					puts("Erro a criar o processo filho");
@@ -266,7 +288,7 @@ int main (int argc, char** argv) {
 	return 0;
 }
 
-void novaTarefa(int op, int id_1, int id_2, int val) {
+void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas) {
 
 	/*Decrementa o semaforo de escrita (Indica que o buffer tem menos um espaco livre)*/
 	sem_wait(&sem_esc);
@@ -277,6 +299,7 @@ void novaTarefa(int op, int id_1, int id_2, int val) {
 	cmd_buffer[buff_write_idx].idConta_1 = id_1;
 	cmd_buffer[buff_write_idx].idConta_2 = id_2;
 	cmd_buffer[buff_write_idx].valor = val;
+	cmd_buffer[buff_write_idx].com_conta_2 = duas_contas;
 	buff_write_idx = (buff_write_idx + 1) % CMD_BUFFER_DIM;
 
 	pthread_mutex_unlock(&mutex_esc);
@@ -288,46 +311,89 @@ void *recebeComandos() {
 
 	while (!para_sair) {
 		/*Decrementa o semaforo de leitura (Espera para que possa ler do buffer)*/
+		while (espera) {
+			puts("Esta a espera");
+			pthread_cond_wait(&espera_simular, &mutex_cond);
+		}
 		sem_wait(&sem_ler);
 		/*Retorna se o utilizador introduziu o comando sair*/
 		if (para_sair) {
 			return NULL;
 		}
-		pthread_mutex_lock(&mutex_ler);
 
+		pthread_mutex_lock(&mutex_ler);
 		/*Le o comando do buffer*/
 		comando_t com = cmd_buffer[buff_read_idx];
-		int conta, op;
-		conta = com.idConta_1;
-		op = com.operacao;
 		buff_read_idx = (buff_read_idx + 1) % CMD_BUFFER_DIM;
 
 		pthread_mutex_unlock(&mutex_ler);
-		/*Verifica se a conta especificada nao esta a ser acedida*/
-		sem_wait(&sem_contas[conta]);
-		pthread_mutex_lock(&mutex_contas[conta]);
 
-		switch (op) {
-			case DEBITAR:
-				tarefaDebitar(com);
-				break;
+		/*Verifica se as contas especificadas nao estao a ser acedidas
+		e se sao validas*/
+		if (contaExiste(com.idConta_1)) {
+			sem_wait(&sem_contas[com.idConta_1]);
+			pthread_mutex_lock(&mutex_contas[com.idConta_1]);
+			puts("Conta 1 valida");
 
-			case CREDITAR:
-				tarefaCreditar(com);
-				break;
+			if (contaExiste(com.idConta_2) || !(com.com_conta_2)) {
+				sem_wait(&sem_contas[com.idConta_2]);
+				pthread_mutex_lock(&mutex_contas[com.idConta_2]);
+				puts("Conta 2 valida");
 
-			case LER_SALDO:
-				tarefaLerSaldo(com);
-				break;
+				switch (com.operacao) {
+					case DEBITAR:
+						tarefaDebitar(com);
+						break;
 
-			case TRANSFERIR:
-				tarefaTransferir(com);
-				break;
+					case CREDITAR:
+						tarefaCreditar(com);
+						break;
+
+					case LER_SALDO:
+						tarefaLerSaldo(com);
+						break;
+
+					case TRANSFERIR:
+						tarefaTransferir(com);
+						break;
+				}
+				pthread_mutex_unlock(&mutex_contas[com.idConta_2]);
+				sem_post(&sem_contas[com.idConta_2]);
+			}
+			/*Imprime erro na introducao da conta 2*/
+			else {
+				printf("Erro ao transferir %d da conta %d para a conta %d.", com.valor, com.idConta_1, com.idConta_2);
+			}
+			pthread_mutex_unlock(&mutex_contas[com.idConta_1]);
+			sem_post(&sem_contas[com.idConta_1]);
+		}
+		/*Imprime erros na introducao da conta 1*/
+		else {
+			switch(com.operacao) {
+				case DEBITAR:
+					printf("%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, com.idConta_1, com.valor);
+					break;
+
+				case CREDITAR:
+					printf("%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, com.idConta_1, com.valor);
+					break;
+
+				case LER_SALDO:
+					printf("%s(%d): Erro.\n\n", COMANDO_LER_SALDO, com.idConta_1);
+					break;
+
+				case TRANSFERIR:
+					printf("Erro ao transferir %d da conta %d para a conta %d.", com.valor, com.idConta_1, com.idConta_2);
+					break;
+			}
 		}
 		
-		pthread_mutex_unlock(&mutex_contas[conta]);
-		sem_post(&sem_contas[conta]);
-			/*Incrementa o semaforo de escrita (Indica que o buffer tem mais um espaco livre)*/
+		if (buff_write_idx == buff_read_idx) {
+			puts("Pode simular");
+			pthread_cond_signal(&pode_simular);
+		}
+
+		/*Incrementa o semaforo de escrita (Indica que o buffer tem mais um espaco livre)*/
 		sem_post(&sem_esc);
 	}
 	return NULL;
