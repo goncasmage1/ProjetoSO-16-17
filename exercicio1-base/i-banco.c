@@ -256,6 +256,7 @@ int main (int argc, char** argv) {
 				todas as tarefas que estao a ser executadas terminem*/
 				espera = 1;
 				pthread_cond_wait(&pode_simular, &mutex_cond);
+				puts("Comecou a simular!");
 
 				/*Cria um processo filho*/
 				pid_t pid = fork();
@@ -311,10 +312,6 @@ void *recebeComandos() {
 
 	while (!para_sair) {
 		/*Decrementa o semaforo de leitura (Espera para que possa ler do buffer)*/
-		while (espera) {
-			puts("Esta a espera");
-			pthread_cond_wait(&espera_simular, &mutex_cond);
-		}
 		sem_wait(&sem_ler);
 		/*Retorna se o utilizador introduziu o comando sair*/
 		if (para_sair) {
@@ -322,6 +319,11 @@ void *recebeComandos() {
 		}
 
 		pthread_mutex_lock(&mutex_ler);
+		printf("%d \n", espera);
+		while (espera) {
+			puts("Esta a espera");
+			pthread_cond_wait(&espera_simular, &mutex_cond);
+		}
 		/*Le o comando do buffer*/
 		comando_t com = cmd_buffer[buff_read_idx];
 		buff_read_idx = (buff_read_idx + 1) % CMD_BUFFER_DIM;
@@ -333,37 +335,44 @@ void *recebeComandos() {
 		if (contaExiste(com.idConta_1)) {
 			sem_wait(&sem_contas[com.idConta_1]);
 			pthread_mutex_lock(&mutex_contas[com.idConta_1]);
-			puts("Conta 1 valida");
 
-			if (contaExiste(com.idConta_2) || !(com.com_conta_2)) {
-				sem_wait(&sem_contas[com.idConta_2]);
-				pthread_mutex_lock(&mutex_contas[com.idConta_2]);
-				puts("Conta 2 valida");
-
-				switch (com.operacao) {
-					case DEBITAR:
-						tarefaDebitar(com);
-						break;
-
-					case CREDITAR:
-						tarefaCreditar(com);
-						break;
-
-					case LER_SALDO:
-						tarefaLerSaldo(com);
-						break;
-
-					case TRANSFERIR:
-						tarefaTransferir(com);
-						break;
+			if (com.com_conta_2) {
+				if (contaExiste(com.idConta_2)) {
+					sem_wait(&sem_contas[com.idConta_2]);
+					pthread_mutex_lock(&mutex_contas[com.idConta_2]);
 				}
+				/*Imprime erro na introducao da conta 2*/
+				else {
+					printf("Erro ao transferir %d da conta %d para a conta %d.\n\n", com.valor, com.idConta_1, com.idConta_2);
+				}
+			}
+
+			switch (com.operacao) {
+				case DEBITAR:
+					tarefaDebitar(com);
+					break;
+
+				case CREDITAR:
+					tarefaCreditar(com);
+					break;
+
+				case LER_SALDO:
+					tarefaLerSaldo(com);
+					break;
+
+				case TRANSFERIR:
+					if ((com.com_conta_2) && (contaExiste(com.idConta_2))) {
+						tarefaTransferir(com);
+					}
+					break;
+			}
+
+			if ((com.com_conta_2) && (contaExiste(com.idConta_2))) {
 				pthread_mutex_unlock(&mutex_contas[com.idConta_2]);
 				sem_post(&sem_contas[com.idConta_2]);
 			}
-			/*Imprime erro na introducao da conta 2*/
-			else {
-				printf("Erro ao transferir %d da conta %d para a conta %d.", com.valor, com.idConta_1, com.idConta_2);
-			}
+
+			
 			pthread_mutex_unlock(&mutex_contas[com.idConta_1]);
 			sem_post(&sem_contas[com.idConta_1]);
 		}
@@ -389,7 +398,6 @@ void *recebeComandos() {
 		}
 		
 		if (buff_write_idx == buff_read_idx) {
-			puts("Pode simular");
 			pthread_cond_signal(&pode_simular);
 		}
 
@@ -423,7 +431,7 @@ void tarefaLerSaldo(comando_t comando) {
 
 void tarefaTransferir(comando_t comando) {
 	if (transferir(comando.idConta_1, comando.idConta_2, comando.valor) < 0) {
-		printf("Erro ao transferir %d da conta %d para a conta %d.", comando.valor, comando.idConta_1, comando.idConta_2);
+		printf("Erro ao transferir %d da conta %d para a conta %d.\n\n", comando.valor, comando.idConta_1, comando.idConta_2);
 	}
 	else {
 		printf("%s(%d, %d, %d): OK\n\n", COMANDO_TRANSFERIR, comando.idConta_1, comando.idConta_2, comando.valor);
