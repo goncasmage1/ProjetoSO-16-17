@@ -106,13 +106,13 @@ char *args[MAXARGS + 1];
 char buffer[BUFFER_SIZE];
 int indice = 0, buff_write_idx = 0, buff_read_idx = 0;
 /*"Booleans"*/
-int para_sair = 0, espera = 0;
+int para_sair = 0, contadorTarefas = 0, espera = 0;
 /*Guarda os pids de todos os processos criados*/
 pid_t processos[MAXTAREFA];
 /*Guarda a pool de tarefas a usar no programa*/
 pthread_t tid[NUM_TRABALHADORAS];
 /*Condicoes para sincronizar as tarefas e as simulacoes*/
-pthread_cond_t pode_simular, espera_simular;
+pthread_cond_t pode_simular;
 /*Vetor de comandos que guarda os comandos a executar numa tarefa*/
 comando_t cmd_buffer[CMD_BUFFER_DIM];
 /*Declaracao de mutexes (trincos)
@@ -134,24 +134,44 @@ int main (int argc, char** argv) {
 	/*Inicializacoes*/
 	signal(SIGUSR1, terminarASAP);
 	inicializarContas();
-	pthread_mutex_init(&mutex_ler, NULL);
-	pthread_mutex_init(&mutex_esc, NULL);
-	pthread_mutex_init(&mutex_cond, NULL);
-	pthread_cond_init(&pode_simular, NULL);
-	pthread_cond_init(&espera_simular, NULL);
-	sem_init(&sem_ler, 0, 0);
-	sem_init(&sem_esc, 0, CMD_BUFFER_DIM);
+	if (pthread_mutex_init(&mutex_ler, NULL) != 0) {
+		printf("Erro a iniciar trinco!");
+		return 0;
+	}
+	if (pthread_mutex_init(&mutex_esc, NULL) != 0) {
+		printf("Erro a iniciar trinco!");
+		return 0;
+	}
+	if (pthread_mutex_init(&mutex_cond, NULL) != 0) {
+		printf("Erro a iniciar trinco!");
+		return 0;
+	}
+	if (pthread_cond_init(&pode_simular, NULL) != 0) {
+		printf("Erro a iniciar trinco!");
+		return 0;
+	}
+	if (sem_init(&sem_ler, 0, 0) == -1) {
+		printf("Erro a iniciar semaforo!");
+		return 0;
+	}
+	if (sem_init(&sem_esc, 0, CMD_BUFFER_DIM) == -1) {
+		printf("Erro a iniciar semaforo!");
+		return 0;
+	}
 
 	int i;
 	for (i = 0; i < NUM_CONTAS; i++) {
-		sem_init(&sem_contas[i], 0, 1);
-		pthread_mutex_init(&mutex_contas[i], NULL);
+		if (sem_init(&sem_contas[i], 0, 1) == -1) {
+			printf("Erro a iniciar semaforo!");
+			return 0;
+		}
+		if (pthread_mutex_init(&mutex_contas[i], NULL) != 0) {
+			printf("Erro a iniciar trinco!");
+			return 0;
+		}
 	}
 	for (i = 0; i < NUM_TRABALHADORAS; i++){
-		if (pthread_create(&tid[i], 0, recebeComandos, NULL) == 0) {
-
-		}
-		else {
+		if (pthread_create(&tid[i], 0, recebeComandos, NULL) != 0) {
 			puts("Erro a criar tarefa!");
 		}
 	}
@@ -252,12 +272,11 @@ int main (int argc, char** argv) {
 			/*Se o numero de anos for valido*/
 			if (anos > 0) {
 
-				/*Indica que ha uma simulacao a espera e aguarda que
-				todas as tarefas que estao a ser executadas terminem*/
+				/*Aguarda que todas as tarefas que estao a ser executadas terminem*/
 				espera = 1;
 				pthread_cond_wait(&pode_simular, &mutex_cond);
 				puts("Comecou a simular!");
-
+				sleep(3);
 				/*Cria um processo filho*/
 				pid_t pid = fork();
 
@@ -273,7 +292,6 @@ int main (int argc, char** argv) {
 
 					/*Indica que as tarefas podem resumir as operacoes*/
 					espera = 0;
-					pthread_cond_signal(&espera_simular);
 				}
 				else {
 					puts("Erro a criar o processo filho");
@@ -294,7 +312,7 @@ void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas) {
 	/*Decrementa o semaforo de escrita (Indica que o buffer tem menos um espaco livre)*/
 	sem_wait(&sem_esc);
 	pthread_mutex_lock(&mutex_esc);
-
+	puts("Recebeu tarefa");
 	/*Adiciona um comando ao buffer*/
 	cmd_buffer[buff_write_idx].operacao = op;
 	cmd_buffer[buff_write_idx].idConta_1 = id_1;
@@ -319,27 +337,27 @@ void *recebeComandos() {
 		}
 
 		pthread_mutex_lock(&mutex_ler);
-		printf("%d \n", espera);
-		while (espera) {
-			puts("Esta a espera");
-			pthread_cond_wait(&espera_simular, &mutex_cond);
-		}
+
 		/*Le o comando do buffer*/
 		comando_t com = cmd_buffer[buff_read_idx];
 		buff_read_idx = (buff_read_idx + 1) % CMD_BUFFER_DIM;
 
 		pthread_mutex_unlock(&mutex_ler);
 
+		int conta_1, conta_2;
+		conta_1 = (com.idConta_1 < com.idConta_2 || !com.com_conta_2) ? com.idConta_1 : com.idConta_2;
+		conta_2 = (com.idConta_1 < com.idConta_2 || !com.com_conta_2) ? com.idConta_2 : com.idConta_1;
+
 		/*Verifica se as contas especificadas nao estao a ser acedidas
 		e se sao validas*/
-		if (contaExiste(com.idConta_1)) {
-			sem_wait(&sem_contas[com.idConta_1]);
-			pthread_mutex_lock(&mutex_contas[com.idConta_1]);
+		if (contaExiste(conta_1)) {
+			sem_wait(&sem_contas[conta_1]);
+			pthread_mutex_lock(&mutex_contas[conta_1]);
 
 			if (com.com_conta_2) {
-				if (contaExiste(com.idConta_2)) {
-					sem_wait(&sem_contas[com.idConta_2]);
-					pthread_mutex_lock(&mutex_contas[com.idConta_2]);
+				if (contaExiste(conta_2)) {
+					sem_wait(&sem_contas[conta_2]);
+					pthread_mutex_lock(&mutex_contas[conta_2]);
 				}
 				/*Imprime erro na introducao da conta 2*/
 				else {
@@ -347,6 +365,7 @@ void *recebeComandos() {
 				}
 			}
 
+			contadorTarefas++;
 			switch (com.operacao) {
 				case DEBITAR:
 					tarefaDebitar(com);
@@ -372,9 +391,14 @@ void *recebeComandos() {
 				sem_post(&sem_contas[com.idConta_2]);
 			}
 
-			
 			pthread_mutex_unlock(&mutex_contas[com.idConta_1]);
 			sem_post(&sem_contas[com.idConta_1]);
+
+			contadorTarefas--;
+			if (contadorTarefas == 0 && espera) {
+				puts("Nao ha mais tarefas");
+				pthread_cond_signal(&pode_simular);
+			}
 		}
 		/*Imprime erros na introducao da conta 1*/
 		else {

@@ -45,7 +45,6 @@ int lerSaldo(int idConta) {
 }
 
 int transferir(int idConta_1, int idConta_2, int valor) {
-	atrasar();
 	if (debitar(idConta_1, valor) == 0 &&
 		creditar(idConta_2, valor) == 0) {
 		return 0;
