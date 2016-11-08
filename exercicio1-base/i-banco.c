@@ -312,7 +312,7 @@ void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas) {
 	/*Decrementa o semaforo de escrita (Indica que o buffer tem menos um espaco livre)*/
 	sem_wait(&sem_esc);
 	pthread_mutex_lock(&mutex_esc);
-	puts("Recebeu tarefa");
+
 	/*Adiciona um comando ao buffer*/
 	cmd_buffer[buff_write_idx].operacao = op;
 	cmd_buffer[buff_write_idx].idConta_1 = id_1;
@@ -344,22 +344,33 @@ void *recebeComandos() {
 
 		pthread_mutex_unlock(&mutex_ler);
 
+		/*Troca os indices das contas se o comando for transferir
+		e se a primeira conta tiver um indice maior que a primeira*/
 		int conta_1, conta_2;
-		conta_1 = (com.idConta_1 < com.idConta_2 || !com.com_conta_2) ? com.idConta_1 : com.idConta_2;
-		conta_2 = (com.idConta_1 < com.idConta_2 || !com.com_conta_2) ? com.idConta_2 : com.idConta_1;
+		if (com.com_conta_2) {
+			conta_1 = (com.idConta_1 < com.idConta_2) ? com.idConta_1 : com.idConta_2;
+			conta_2 = (com.idConta_1 < com.idConta_2) ? com.idConta_2 : com.idConta_1;
+			printf("Conta 1 : %d\tConta 2 : %d\n", conta_1, conta_2);
+		}
+		else {
+			conta_1 = com.idConta_1;
+			conta_2 = com.idConta_2;
+		}
 
 		/*Verifica se as contas especificadas nao estao a ser acedidas
 		e se sao validas*/
 		if (contaExiste(conta_1)) {
+			puts("Conta 1 valida");
 			sem_wait(&sem_contas[conta_1]);
 			pthread_mutex_lock(&mutex_contas[conta_1]);
 
 			if (com.com_conta_2) {
 				if (contaExiste(conta_2)) {
+					puts("Conta 2 valida");
 					sem_wait(&sem_contas[conta_2]);
 					pthread_mutex_lock(&mutex_contas[conta_2]);
 				}
-				/*Imprime erro na introducao da conta 2*/
+				/*Imprime erro na introducao da conta*/
 				else {
 					printf("Erro ao transferir %d da conta %d para a conta %d.\n\n", com.valor, com.idConta_1, com.idConta_2);
 				}
@@ -386,17 +397,16 @@ void *recebeComandos() {
 					break;
 			}
 
-			if ((com.com_conta_2) && (contaExiste(com.idConta_2))) {
-				pthread_mutex_unlock(&mutex_contas[com.idConta_2]);
-				sem_post(&sem_contas[com.idConta_2]);
+			if ((com.com_conta_2) && (contaExiste(conta_2))) {
+				pthread_mutex_unlock(&mutex_contas[conta_2]);
+				sem_post(&sem_contas[conta_2]);
 			}
 
-			pthread_mutex_unlock(&mutex_contas[com.idConta_1]);
-			sem_post(&sem_contas[com.idConta_1]);
+			pthread_mutex_unlock(&mutex_contas[conta_1]);
+			sem_post(&sem_contas[conta_1]);
 
 			contadorTarefas--;
 			if (contadorTarefas == 0 && espera) {
-				puts("Nao ha mais tarefas");
 				pthread_cond_signal(&pode_simular);
 			}
 		}
@@ -416,13 +426,13 @@ void *recebeComandos() {
 					break;
 
 				case TRANSFERIR:
-					printf("Erro ao transferir %d da conta %d para a conta %d.", com.valor, com.idConta_1, com.idConta_2);
+					printf("Erro ao transferir %d da conta %d para a conta %d.\n\n", com.valor, com.idConta_1, com.idConta_2);
+					break;
+
+				default:
+					puts("Erro generico");
 					break;
 			}
-		}
-		
-		if (buff_write_idx == buff_read_idx) {
-			pthread_cond_signal(&pode_simular);
 		}
 
 		/*Incrementa o semaforo de escrita (Indica que o buffer tem mais um espaco livre)*/
