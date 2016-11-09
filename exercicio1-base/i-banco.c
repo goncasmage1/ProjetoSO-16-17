@@ -344,6 +344,7 @@ void *recebeComandos() {
 
 		pthread_mutex_unlock(&mutex_ler);
 
+		int continua = 1;
 		/*Troca os indices das contas se o comando for transferir
 		e se a primeira conta tiver um indice maior que a primeira*/
 		int conta_1, conta_2;
@@ -351,6 +352,9 @@ void *recebeComandos() {
 			conta_1 = (com.idConta_1 < com.idConta_2) ? com.idConta_1 : com.idConta_2;
 			conta_2 = (com.idConta_1 < com.idConta_2) ? com.idConta_2 : com.idConta_1;
 			printf("Conta 1 : %d\tConta 2 : %d\n", conta_1, conta_2);
+			if (conta_1 == conta_2) {
+				continua = 0;
+			}
 		}
 		else {
 			conta_1 = com.idConta_1;
@@ -359,7 +363,7 @@ void *recebeComandos() {
 
 		/*Verifica se as contas especificadas nao estao a ser acedidas
 		e se sao validas*/
-		if (contaExiste(conta_1)) {
+		if (contaExiste(conta_1) && continua) {
 			puts("Conta 1 valida");
 			sem_wait(&sem_contas[conta_1]);
 			pthread_mutex_lock(&mutex_contas[conta_1]);
@@ -410,7 +414,7 @@ void *recebeComandos() {
 				pthread_cond_signal(&pode_simular);
 			}
 		}
-		/*Imprime erros na introducao da conta 1*/
+		/*Imprime erros na introducao da conta*/
 		else {
 			switch(com.operacao) {
 				case DEBITAR:

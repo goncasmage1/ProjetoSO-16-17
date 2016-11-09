@@ -10,7 +10,7 @@
 #define TAXAJURO 0.1
 #define CUSTOMANUTENCAO 1
 
-#define ATRASO 10
+#define ATRASO 3
 
 void inicializarContas();
 int contaExiste(int idConta);
