@@ -31,6 +31,10 @@ int debitar(int idConta, int valor) {
 
 int creditar(int idConta, int valor) {
 	atrasar();
+	atrasar();
+	atrasar();
+	atrasar();
+	atrasar();
 	if (!contaExiste(idConta) || valor <= 0)
 		return -1;
 	contasSaldos[idConta - 1] += valor;
