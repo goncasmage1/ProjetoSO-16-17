@@ -13,16 +13,15 @@
 #define ATRASO 1
 
 void inicializarContas();
-void destroy_mutex_contas();
 int contaExiste(int idConta);
 int debitar(int idConta, int valor);
-int debitarSemMutex(int idConta, int valor);
 int creditar(int idConta, int valor);
-int creditarSemMutex(int idConta, int valor);
-int transferir(int idContaOrigem, int idContaDestino, int valor);
 int lerSaldo(int idConta);
-void trataSignal(int sig);
+int transferir(int idConta_1, int idConta_2, int valor);
 void simular(int numAnos);
+/*Ativa uma bool que indica que o
+processo deve terminar assim que possivel*/
+void terminarASAP();
 
 
 #endif
