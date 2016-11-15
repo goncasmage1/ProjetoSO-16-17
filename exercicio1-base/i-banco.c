@@ -448,32 +448,40 @@ void *recebeComandos() {
 }
 
 void tarefaDebitar(comando_t comando) {
+	FILE* file = fopen("log.txt", "ab");
 	if (debitar (comando.idConta_1, comando.valor) < 0)
-		printf("%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
+		fprintf(file, "%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
 	else
-		printf("%s(%d, %d): OK\n\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
+		fprintf(file, "%s(%d, %d): OK\n\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
+	fclose(file);
 }
 
 void tarefaCreditar(comando_t comando) {
+	FILE* file = fopen("log.txt", "ab");
 	if (creditar (comando.idConta_1, comando.valor) < 0)
-		printf("%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
+		fprintf(file, "%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
 	else
-		printf("%s(%d, %d): OK\n\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
+		fprintf(file, "%s(%d, %d): OK\n\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
+	fclose(file);
 }
 
 void tarefaLerSaldo(comando_t comando) {
+	FILE* file = fopen("log.txt", "ab");
 	int saldo = lerSaldo(comando.idConta_1);
 	if (saldo < 0)
-		printf("%s(%d): Erro.\n\n", COMANDO_LER_SALDO, comando.idConta_1);
+		fprintf(file, "%s(%d): Erro.\n\n", COMANDO_LER_SALDO, comando.idConta_1);
 	else
-		printf("%s(%d): O saldo da conta é %d.\n\n", COMANDO_LER_SALDO, comando.idConta_1, saldo);
+		fprintf(file, "%s(%d): O saldo da conta é %d.\n\n", COMANDO_LER_SALDO, comando.idConta_1, saldo);
+	fclose(file);
 }
 
 void tarefaTransferir(comando_t comando) {
+	FILE* file = fopen("log.txt", "ab");
 	if (transferir(comando.idConta_1, comando.idConta_2, comando.valor) < 0) {
-		printf("Erro ao transferir %d da conta %d para a conta %d.\n\n", comando.valor, comando.idConta_1, comando.idConta_2);
+		fprintf(file, "Erro ao transferir %d da conta %d para a conta %d.\n\n", comando.valor, comando.idConta_1, comando.idConta_2);
 	}
 	else {
-		printf("%s(%d, %d, %d): OK\n\n", COMANDO_TRANSFERIR, comando.idConta_1, comando.idConta_2, comando.valor);
+		fprintf(file, "%s(%d, %d, %d): OK\n\n", COMANDO_TRANSFERIR, comando.idConta_1, comando.idConta_2, comando.valor);
 	}
+	fclose(file);
 }
