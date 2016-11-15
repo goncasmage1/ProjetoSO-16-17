@@ -72,8 +72,6 @@ int pedidos_pendentes = 0;
 int t_num[NUM_TRABALHADORAS]; /*##aux*/
 
 
-
-
 void wait_on_read_sem(void) {
   while (sem_wait(&sem_read_ctrl) != 0) {
     if (errno == EINTR)
@@ -118,6 +116,7 @@ void unlock_cmd_buffer(void) {
   }
 }
 
+<<<<<<< HEAD
 
 void lock_pedidos_pendentes(void) {
   if ((errno = pthread_mutex_lock(&pedidos_pendentes_ctrl)) != 0) {
@@ -131,6 +130,7 @@ void unlock_pedidos_pendentes(void) {
     perror("Error in pthread_mutex_unlock()");
     exit(EXIT_FAILURE);
   }
+
 }
 
 void wait_cond_simular() {
@@ -489,6 +489,5 @@ int main (int argc, char** argv) {
       pedidos_pendentes++;
       unlock_pedidos_pendentes();
     }
-
   } 
 }
