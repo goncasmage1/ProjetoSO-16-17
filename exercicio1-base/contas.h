@@ -10,18 +10,19 @@
 #define TAXAJURO 0.1
 #define CUSTOMANUTENCAO 1
 
-#define ATRASO 3
+#define ATRASO 1
 
 void inicializarContas();
+void destroy_mutex_contas();
 int contaExiste(int idConta);
 int debitar(int idConta, int valor);
+int debitarSemMutex(int idConta, int valor);
 int creditar(int idConta, int valor);
+int creditarSemMutex(int idConta, int valor);
+int transferir(int idContaOrigem, int idContaDestino, int valor);
 int lerSaldo(int idConta);
-int transferir(int idConta_1, int idConta_2, int valor);
+void trataSignal(int sig);
 void simular(int numAnos);
-/*Ativa uma bool que indica que o
-processo deve terminar assim que possivel*/
-void terminarASAP();
 
 
 #endif
