@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <semaphore.h>
@@ -94,6 +95,38 @@ int main(int argc, char** argv) {
 		/* EOF (end of file) do stdin ou comando "sair-terminal" */
 		else if (numargs < 0 ||
 			(numargs > 0 && (strcmp(args[0], COMANDO_SAIR_TERMINAL) == 0))) {
+
+			puts("i-banco vai terminar.\n--");
+			int i, pid, status;
+			para_sair = 1;
+
+			/*Forca todas as tarefas bloqueadas a avancar e terminarem-se*/
+			for (i = 0; i < NUM_TRABALHADORAS; i++) {
+				sem_post(&sem_ler);
+			}
+			/*Certifica-se de que todas as tarefas terminaram*/
+			for (i = 0; i < NUM_TRABALHADORAS; i++) {
+				pthread_join(tid[i], NULL);
+			}
+
+			/*Sair agora - chama kill a todos os processos filho*/
+			if (args[1] != NULL && (strcmp(args[1], COMANDO_SAIR_AGORA) == 0)) {
+				for (i = 0; i < indice; i++) {
+					kill(processos[i], SIGUSR1);
+				}
+			}
+
+			/*Termina os processos zombie antes de o programa acabar*/
+			for (i = 0; i < indice; i++) {
+				pid = wait(&status);
+				printf("FILHO TERMINADO (PID=%d; ", pid);
+
+				if (status == 0) {
+					puts("terminou normalmente)");
+				} else {
+					puts("terminou abruptamente)");
+				}
+			}
 
 			puts("\ni-banco-terminal terminou.\n");
 			return 0;

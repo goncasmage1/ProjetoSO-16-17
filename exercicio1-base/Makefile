@@ -10,11 +10,11 @@ commandlinereader.o : commandlinereader.c commandlinereader.h
 contas.o : contas.c contas.h
 	gcc $(CFLAGS) -c contas.c
 
-i-banco.o: i-banco.c contas.h
-	gcc $(CFLAGS) -c i-banco.c
-
 i-banco-terminal.o: i-banco-terminal.c commandlinereader.h
 	gcc $(CFLAGS) -c i-banco-terminal.c
+
+i-banco.o: i-banco.c contas.h
+	gcc $(CFLAGS) -c i-banco.c
 
 clean:
 	rm -f *.o main terminal

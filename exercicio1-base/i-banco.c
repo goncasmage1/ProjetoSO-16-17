@@ -8,12 +8,15 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#define gettid() syscall(SYS_gettid)
 
 #define COMANDO_DEBITAR "debitar"
 #define COMANDO_CREDITAR "creditar"
@@ -335,7 +338,7 @@ void tarefaDebitar(comando_t comando) {
 		//printf("%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
 		;
 	else
-		fprintf(file, "%d: %s\n", gettid(), COMANDO_DEBITAR);
+		fprintf(file, "%ld: %s\n", gettid(), COMANDO_DEBITAR);
 		//printf("%s(%d, %d): OK\n\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
 	fclose(file);
 }
@@ -346,7 +349,7 @@ void tarefaCreditar(comando_t comando) {
 		//printf("%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
 		;
 	else
-		fprintf(file, "%d: %s\n", gettid(), COMANDO_CREDITAR);
+		fprintf(file, "%ld: %s\n", gettid(), COMANDO_CREDITAR);
 		//printf("%s(%d, %d): OK\n\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
 	fclose(file);
 }
@@ -358,7 +361,7 @@ void tarefaLerSaldo(comando_t comando) {
 		//printf("%s(%d): Erro.\n\n", COMANDO_LER_SALDO, comando.idConta_1);
 		;
 	else
-		fprintf(file, "%d: %s\n", gettid(), COMANDO_LER_SALDO);
+		fprintf(file, "%ld: %s\n", gettid(), COMANDO_LER_SALDO);
 		//printf("%s(%d): O saldo da conta é %d.\n\n", COMANDO_LER_SALDO, comando.idConta_1, saldo);
 	fclose(file);
 }
@@ -369,11 +372,7 @@ void tarefaTransferir(comando_t comando) {
 		//printf("Erro ao transferir %d da conta %d para a conta %d.\n\n", comando.valor, comando.idConta_1, comando.idConta_2);
 		;
 	else
-		fprintf(file, "%d: %s\n", gettid(), COMANDO_TRANSFERIR);
+		fprintf(file, "%ld: %s\n", gettid(), COMANDO_TRANSFERIR);
 		//printf("%s(%d, %d, %d): OK\n\n", COMANDO_TRANSFERIR, comando.idConta_1, comando.idConta_2, comando.valor);
 	fclose(file);
-}
-
-pthread_t gettid() {
-    return pthread_self(void);
 }
