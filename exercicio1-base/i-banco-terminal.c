@@ -8,6 +8,8 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdlib.h>
@@ -32,20 +34,47 @@
 #define BUFFER_SIZE 100
 #define CMD_BUFFER_DIM  (NUM_TRABALHADORAS * 2)
 
+/*struct que representa um comando introduzido pelo utilizador*/
+typedef struct
+{
+	int operacao;
+	int idConta_1;
+	int idConta_2;
+	int valor;
+	/*Indica se precisamos de considerar o valor da conta 2*/
+	int com_conta_2;
+} comando_t;
+
 
 /**Variaveis globais*/
-
 char *args[MAXARGS + 1];
-char *ficheiro;
-char buffer[BUFFER_SIZE];
-
+const char *ficheiro;
 /**Variaveis globais*/
 
 
-int main (int argc, char** argv) {
+int main(int argc, char** argv) {
 
 	if (argc == 2) {
 		ficheiro = strdup(argv[1]);
+	}
+
+	/*Cria um processo filho*/
+	pid_t pid_banco = fork();
+
+	/*O processo filho faz a simulacao*/
+	if (pid_banco == 0) {
+		//execv("nome do executavel", ficheiro);
+	}
+	/*O processo pai adiciona o pid do
+	processo filho ao vetor de pid's */
+	else if (pid_banco > 0){
+		//processos[indice++] = pid;
+
+		/*Indica que as tarefas podem resumir as operacoes*/
+		espera = 0;
+	}
+	else {
+		puts("Erro a criar o processo filho");
 	}
 
 	printf("Bem-vinda/o ao i-banco\n\n");
@@ -62,7 +91,7 @@ int main (int argc, char** argv) {
 		else if (numargs < 0 ||
 			(numargs > 0 && (strcmp(args[0], COMANDO_SAIR_TERMINAL) == 0))) {
 
-			puts("\ni-banco-terminal terminou.");
+			puts("\ni-banco-terminal terminou.\n");
 			return 0;
 		}
 			
@@ -145,4 +174,37 @@ int main (int argc, char** argv) {
 		}
 	}
 	return 0;
+}
+
+void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas) {
+
+	/*Decrementa o semaforo de escrita (Indica que o pipe tem um comando novo para ler)*/
+	sem_wait(&sem_esc);
+	pthread_mutex_lock(&mutex_esc);
+
+	int fd;
+	if (fd = open(ficheiro, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) == -1) {
+		perror("Erro a abrir o ficheiro indicado.\n");
+    	exit(1);
+	}
+	/*Adiciona um comando ao pipe*/
+	comando_t com;
+	com.operacao = op;
+	com.idConta_1 = id_1;
+	com.idConta_2 = id_2;
+	com.valor = val;
+	com.com_conta_2 = duas_contas;
+
+	if (write(fd, &com, sizeof(struct comando_t)) == -1) {
+		perror("Erro a escrever no ficheiro indicado.\n");
+    	exit(1);
+	}
+	if (close(fd) == -1) {
+		perror("Erro a fechar o ficheiro indicado.\n");
+    	exit(1);
+	}
+
+	pthread_mutex_unlock(&mutex_esc);
+	/*Incrementa o semaforo de leitura (Permite que uma tarefa leia do pipe)*/
+	sem_post(&sem_ler);
 }

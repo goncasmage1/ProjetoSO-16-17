@@ -8,6 +8,8 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdlib.h>
@@ -185,32 +187,6 @@ int main (int argc, char** argv) {
 	return 0;
 }
 
-void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas) {
-
-	/*Decrementa o semaforo de escrita (Indica que o buffer tem menos um espaco livre)*/
-	sem_wait(&sem_esc);
-	pthread_mutex_lock(&mutex_esc);
-
-	FILE* file = fopen("log.txt", "a");
-	if (file) {
-		/*Adiciona um comando ao buffer*/
-		comando_t com;
-		com.operacao = op;
-		com.idConta_1 = id_1;
-		com.idConta_2 = id_2;
-		com.valor = val;
-		com.com_conta_2 = duas_contas;
-
-		fwrite(&com, sizeof(struct comando_t), 1, file);
-		//buff_write_idx = (buff_write_idx + 1) % CMD_BUFFER_DIM;
-	}
-	fclose(file);
-
-	pthread_mutex_unlock(&mutex_esc);
-	/*Incrementa o semaforo de leitura (Permite que uma tarefa leia do buffer)*/
-	sem_post(&sem_ler);
-}
-
 void *recebeComandos() {
 
 	while (!para_sair) {
@@ -223,34 +199,38 @@ void *recebeComandos() {
 
 		pthread_mutex_lock(&mutex_ler);
 		/*Le o comando do buffer*/
-		int continua = 1, leu_fich = 1;
-		FILE* file = fopen(/*i-banco-pipe*/, "a");
-		if (file) {
-			comando_t com;
-			fread(&my_record,sizeof(struct rec),1,ptr_myfile);
-			buff_read_idx = (buff_read_idx + 1) % CMD_BUFFER_DIM;
-			pthread_mutex_unlock(&mutex_ler);
+		int continua = 1;
+		int fd;
+		if (fd = open(ficheiro, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) == -1) {
+			perror("Erro a abrir o ficheiro indicado.\n");
+	    	exit(1);
+		}
+		comando_t com;
+		if (read(fd, &com, sizeof(struct comando_t)) == -1) {
+			perror("Erro a ler o ficheiro indicado.\n");
+    		exit(1);
+		}
+		if (close(fd) == -1) {
+			perror("Erro a fechar o ficheiro indicado.\n");
+	    	exit(1);
+		}
+		pthread_mutex_unlock(&mutex_ler);
 
-			/*Troca os indices das contas se o comando for transferir
-			e se a primeira conta tiver um indice maior que a primeira*/
-			int conta_1, conta_2;
-			if (com.com_conta_2) {
-				conta_1 = (com.idConta_1 < com.idConta_2) ? com.idConta_1 : com.idConta_2;
-				conta_2 = (com.idConta_1 < com.idConta_2) ? com.idConta_2 : com.idConta_1;
+		/*Troca os indices das contas se o comando for transferir
+		e se a primeira conta tiver um indice maior que a primeira*/
+		int conta_1, conta_2;
+		if (com.com_conta_2) {
+			conta_1 = (com.idConta_1 < com.idConta_2) ? com.idConta_1 : com.idConta_2;
+			conta_2 = (com.idConta_1 < com.idConta_2) ? com.idConta_2 : com.idConta_1;
 
-				/*Se o indice for o mesmo*/
-				if (conta_1 == conta_2) {
-					continua = 0;
-				}
-			}
-			else {
-				conta_1 = com.idConta_1;
-				conta_2 = com.idConta_2;
+			/*Se o indice for o mesmo*/
+			if (conta_1 == conta_2) {
+				continua = 0;
 			}
 		}
 		else {
-			leu_fich = 0;
-			puts("Erro a ler o ficheiro");
+			conta_1 = com.idConta_1;
+			conta_2 = com.idConta_2;
 		}
 
 		contadorTarefas++;
@@ -310,7 +290,7 @@ void *recebeComandos() {
 		}
 
 		/*Imprime erros na introducao da conta*/
-		if ((!contaExiste(conta_1) || !continua) && leu_fich){
+		if ((!contaExiste(conta_1) || !continua)){
 			switch(com.operacao) {
 				case DEBITAR:
 					printf("%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, com.idConta_1, com.valor);
@@ -333,8 +313,6 @@ void *recebeComandos() {
 					break;
 			}
 		}
-		fclose(file);
-
 		/*Incrementa o semaforo de escrita (Indica que o buffer tem mais um espaco livre)*/
 		sem_post(&sem_esc);
 	}
