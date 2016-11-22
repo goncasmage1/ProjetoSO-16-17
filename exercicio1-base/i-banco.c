@@ -3,7 +3,6 @@
 // Sistemas Operativos, DEI/IST/ULisboa 2016-17
 */
 
-#include "commandlinereader.h"
 #include "contas.h"
 #include <signal.h>
 #include <unistd.h>
@@ -105,7 +104,8 @@ void tarefaTransferir(comando_t comando);
 /**Variaveis globais*/
 
 char *args[MAXARGS + 1];
-char buffer[BUFFER_SIZE];
+/*Nome do pipe a criar*/
+const char *ficheiro;
 int indice = 0, buff_write_idx = 0, buff_read_idx = 0;
 /*"Booleans"*/
 int para_sair = 0, contadorTarefas = 0, espera = 0;
@@ -136,6 +136,15 @@ int main (int argc, char** argv) {
 	/*Inicializacoes*/
 	signal(SIGUSR1, terminarASAP);
 	inicializarContas();
+
+	if (argc == 2) {
+		ficheiro = strdup(argv[1]);
+	}
+	else {
+		perror("Erro: Nao foi especificado nenhum ficheiro como pipe.\n");
+    	exit(1);
+	}
+
 	if (pthread_mutex_init(&mutex_ler, NULL) != 0) {
 		printf("Erro a iniciar trinco!");
 		return 0;
@@ -190,7 +199,7 @@ int main (int argc, char** argv) {
 void *recebeComandos() {
 
 	while (!para_sair) {
-		/*Decrementa o semaforo de leitura (Espera para que possa ler do buffer)*/
+		/*Decrementa o semaforo de leitura (Espera para que possa ler do pipe)*/
 		sem_wait(&sem_ler);
 		/*Retorna se o utilizador introduziu o comando sair*/
 		if (para_sair) {
@@ -198,15 +207,16 @@ void *recebeComandos() {
 		}
 
 		pthread_mutex_lock(&mutex_ler);
-		/*Le o comando do buffer*/
+		/*Le o comando do pipe*/
 		int continua = 1;
 		int fd;
-		if (fd = open(ficheiro, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) == -1) {
+		comando_t com;
+		fd = open(ficheiro, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+		if (fd == -1) {
 			perror("Erro a abrir o ficheiro indicado.\n");
 	    	exit(1);
 		}
-		comando_t com;
-		if (read(fd, &com, sizeof(struct comando_t)) == -1) {
+		if (read(fd, &com, sizeof(comando_t)) == -1) {
 			perror("Erro a ler o ficheiro indicado.\n");
     		exit(1);
 		}
@@ -236,7 +246,7 @@ void *recebeComandos() {
 		contadorTarefas++;
 		/*Verifica se as contas especificadas nao estao a ser acedidas
 		e se sao validas*/
-		if (contaExiste(conta_1) && continua && leu_fich) {
+		if (contaExiste(conta_1) && continua) {
 			sem_wait(&sem_contas[conta_1]);
 			pthread_mutex_lock(&mutex_contas[conta_1]);
 
@@ -285,7 +295,7 @@ void *recebeComandos() {
 		contadorTarefas--;
 		/*Verifica se ainda ha tarefas a executar operacoes,
 		se nao houverem liberta o trinco condicional do comando simular*/
-		if (leu_fich && espera && contadorTarefas == 0 && buff_write_idx == buff_read_idx) {
+		if (espera && contadorTarefas == 0 && buff_write_idx == buff_read_idx) {
 			pthread_cond_signal(&pode_simular);
 		}
 
@@ -313,7 +323,7 @@ void *recebeComandos() {
 					break;
 			}
 		}
-		/*Incrementa o semaforo de escrita (Indica que o buffer tem mais um espaco livre)*/
+		/*Incrementa o semaforo de escrita (Indica que foi lido um comando do pipe)*/
 		sem_post(&sem_esc);
 	}
 	return NULL;
@@ -323,6 +333,7 @@ void tarefaDebitar(comando_t comando) {
 	FILE* file = fopen("log.txt", "a");
 	if (debitar (comando.idConta_1, comando.valor) < 0)
 		//printf("%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
+		;
 	else
 		fprintf(file, "%d: %s\n", gettid(), COMANDO_DEBITAR);
 		//printf("%s(%d, %d): OK\n\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
@@ -333,6 +344,7 @@ void tarefaCreditar(comando_t comando) {
 	FILE* file = fopen("log.txt", "a");
 	if (creditar (comando.idConta_1, comando.valor) < 0)
 		//printf("%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
+		;
 	else
 		fprintf(file, "%d: %s\n", gettid(), COMANDO_CREDITAR);
 		//printf("%s(%d, %d): OK\n\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
@@ -344,6 +356,7 @@ void tarefaLerSaldo(comando_t comando) {
 	int saldo = lerSaldo(comando.idConta_1);
 	if (saldo < 0)
 		//printf("%s(%d): Erro.\n\n", COMANDO_LER_SALDO, comando.idConta_1);
+		;
 	else
 		fprintf(file, "%d: %s\n", gettid(), COMANDO_LER_SALDO);
 		//printf("%s(%d): O saldo da conta é %d.\n\n", COMANDO_LER_SALDO, comando.idConta_1, saldo);
@@ -354,12 +367,13 @@ void tarefaTransferir(comando_t comando) {
 	FILE* file = fopen("log.txt", "a");
 	if (transferir(comando.idConta_1, comando.idConta_2, comando.valor) < 0)
 		//printf("Erro ao transferir %d da conta %d para a conta %d.\n\n", comando.valor, comando.idConta_1, comando.idConta_2);
+		;
 	else
 		fprintf(file, "%d: %s\n", gettid(), COMANDO_TRANSFERIR);
 		//printf("%s(%d, %d, %d): OK\n\n", COMANDO_TRANSFERIR, comando.idConta_1, comando.idConta_2, comando.valor);
 	fclose(file);
 }
 
-uint64_t gettid() {
-    return (uint64_t)pthread_self();
+pthread_t gettid() {
+    return pthread_self(void);
 }

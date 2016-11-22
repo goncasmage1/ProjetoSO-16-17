@@ -1,5 +1,8 @@
-main: commandlinereader.o contas.o i-banco.o
-	gcc -pthread -o main commandlinereader.o contas.o i-banco.o
+main: contas.o i-banco.o
+	gcc -pthread -o main contas.o i-banco.o
+
+terminal: commandlinereader.o i-banco.o
+	gcc -pthread -o main commandlinereader.o i-banco.o
 
 commandlinereader.o : commandlinereader.c commandlinereader.h
 	gcc $(CFLAGS) -c commandlinereader.c
@@ -7,10 +10,13 @@ commandlinereader.o : commandlinereader.c commandlinereader.h
 contas.o : contas.c contas.h
 	gcc $(CFLAGS) -c contas.c
 
-i-banco.o: i-banco.c commandlinereader.h contas.h
+i-banco.o: i-banco.c contas.h
 	gcc $(CFLAGS) -c i-banco.c
 
+i-banco-terminal.o: i-banco-terminal.c commandlinereader.h
+	gcc $(CFLAGS) -c i-banco-terminal.c
+
 clean:
-	rm -f *.o main
+	rm -f *.o main terminal
 
 CFLAGS = -g -Wall -pedantic

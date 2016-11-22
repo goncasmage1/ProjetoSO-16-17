@@ -48,7 +48,10 @@ typedef struct
 
 /**Variaveis globais*/
 char *args[MAXARGS + 1];
+/*Nome do pipe a criar*/
 const char *ficheiro;
+/*Guarda o pid do i-banco*/
+pid_t banco_pid;
 /**Variaveis globais*/
 
 
@@ -57,21 +60,22 @@ int main(int argc, char** argv) {
 	if (argc == 2) {
 		ficheiro = strdup(argv[1]);
 	}
+	else {
+		perror("Erro: Nao foi especificado nenhum ficheiro como pipe.\n");
+    	exit(1);
+	}
 
 	/*Cria um processo filho*/
 	pid_t pid_banco = fork();
 
-	/*O processo filho faz a simulacao*/
+	/*O processo filho corre o i-banco*/
 	if (pid_banco == 0) {
 		//execv("nome do executavel", ficheiro);
 	}
-	/*O processo pai adiciona o pid do
-	processo filho ao vetor de pid's */
+	/*O processo pai associa o pid do processo filho
+	ao seu pid do i-banco*/
 	else if (pid_banco > 0){
-		//processos[indice++] = pid;
-
-		/*Indica que as tarefas podem resumir as operacoes*/
-		espera = 0;
+		banco_pid = pid_banco;
 	}
 	else {
 		puts("Erro a criar o processo filho");
@@ -183,7 +187,8 @@ void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas) {
 	pthread_mutex_lock(&mutex_esc);
 
 	int fd;
-	if (fd = open(ficheiro, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) == -1) {
+	fd = open(ficheiro, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+	if (fd == -1) {
 		perror("Erro a abrir o ficheiro indicado.\n");
     	exit(1);
 	}
@@ -195,7 +200,7 @@ void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas) {
 	com.valor = val;
 	com.com_conta_2 = duas_contas;
 
-	if (write(fd, &com, sizeof(struct comando_t)) == -1) {
+	if (write(fd, &com, sizeof(comando_t)) == -1) {
 		perror("Erro a escrever no ficheiro indicado.\n");
     	exit(1);
 	}
