@@ -51,8 +51,6 @@ typedef struct
 char *args[MAXARGS + 1];
 /*Nome do pipe a criar*/
 const char *ficheiro;
-/*Guarda o pid do i-banco*/
-pid_t banco_pid;
 /**Variaveis globais*/
 
 
@@ -66,22 +64,6 @@ int main(int argc, char** argv) {
     	exit(1);
 	}
 
-	/*Cria um processo filho*/
-	pid_t pid_banco = fork();
-
-	/*O processo filho corre o i-banco*/
-	if (pid_banco == 0) {
-		//execv("nome do executavel", ficheiro);
-	}
-	/*O processo pai associa o pid do processo filho
-	ao seu pid do i-banco*/
-	else if (pid_banco > 0){
-		banco_pid = pid_banco;
-	}
-	else {
-		puts("Erro a criar o processo filho");
-	}
-
 	printf("Bem-vinda/o ao i-banco\n\n");
 
 	while (1) {
@@ -92,9 +74,9 @@ int main(int argc, char** argv) {
 			/* Nenhum argumento; ignora e volta a pedir */
 			continue;
 
-		/* EOF (end of file) do stdin ou comando "sair-terminal" */
+		/* EOF (end of file) do stdin ou comando "sair" */
 		else if (numargs < 0 ||
-			(numargs > 0 && (strcmp(args[0], COMANDO_SAIR_TERMINAL) == 0))) {
+			(numargs > 0 && (strcmp(args[0], COMANDO_SAIR) == 0))) {
 
 			puts("i-banco vai terminar.\n--");
 			int i, pid, status;
@@ -130,6 +112,11 @@ int main(int argc, char** argv) {
 
 			puts("\ni-banco-terminal terminou.\n");
 			return 0;
+		}
+
+		/* Sair terminal */
+		else if (strcmp(args[0], COMANDO_SAIR_TERMINAL) == 0) {
+
 		}
 			
 		/* Debitar */
