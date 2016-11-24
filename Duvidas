@@ -1,0 +1,4 @@
+Duvidas :
+
+	- Como comunicar entre os processos (indicar que o i-banco pode ler do pipe por parte do i-banco-terminal)
+	- Como apagar comandos que ja foram lidos do pipe

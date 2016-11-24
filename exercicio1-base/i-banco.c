@@ -140,11 +140,14 @@ int main (int argc, char** argv) {
 	signal(SIGUSR1, terminarASAP);
 	inicializarContas();
 
-	if (argc == 2) {
-		ficheiro = strdup(argv[1]);
+	int fd;
+	fd = open("i-banco-pipe", O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+	if (fd == -1) {
+		perror("Erro a abrir o ficheiro indicado.\n");
+    	exit(1);
 	}
-	else {
-		perror("Erro: Nao foi especificado nenhum ficheiro como pipe.\n");
+	if (close(fd) == -1) {
+		perror("Erro a fechar o ficheiro indicado.\n");
     	exit(1);
 	}
 
