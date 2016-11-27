@@ -52,18 +52,13 @@ int transferir(int idConta_1, int idConta_2, int valor) {
 	return -1;
 }
 
-void simular(int numAnos) {
+void simular(int numAnos, char* fich) {
 
 	//int fd;
-	char nome[] = "i-banco-sim-%ld.txt";
-	char pidlong[100];
-	long pidnumber = getpid();
-	sprintf(pidlong, nome, pidnumber);
-
-	printf("%s\n", pidlong);
+	
 
 	/*
-	fd = open("i-banco-pipe", O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+	fd = open("pidlong", O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 	if (fd == -1) {
 		perror("Erro a abrir o ficheiro indicado.\n");
     	exit(1);

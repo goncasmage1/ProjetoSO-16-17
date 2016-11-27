@@ -31,9 +31,6 @@
 #define LER_SALDO 3
 #define TRANSFERIR 4
 
-#define MAXARGS 4
-#define BUFFER_SIZE 100
-#define MAXTAREFA 20
 #define NUM_TRABALHADORAS 3
 #define CMD_BUFFER_DIM  (NUM_TRABALHADORAS * 2)
 
@@ -48,20 +45,6 @@ typedef struct
 	int com_conta_2;
 } comando_t;
 
-/*********************************************************************
-*	novaTarefa(int op, int id, int val):
-*comando
-*	Descricao:	Cria um novo comando_t baseado nas informacoes passadas
-*				e insere-o no buffer
-*	Parametros: op -	O numero da operacao associado a uma das tres
-*						operacoes (debitar, creditar e lerSaldo)
-*				id -	O ID da conta introduzida
-*				val -	O valor introduzido para ser usado na operacao
-*				duas_contas - Indica se o valor da segunda conta
-								deve ser considerado
-*	Returns: 	void
-**********************************************************************/
-void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas);
 /*********************************************************************
 *	recebeComandos():
 *
@@ -106,14 +89,11 @@ void tarefaTransferir(comando_t comando);
 
 /**Variaveis globais*/
 
-char *args[MAXARGS + 1];
 /*Nome do pipe a criar*/
-const char *ficheiro;
+const char *ficheiro = "i-banco-pipe";
 int indice = 0, buff_write_idx = 0, buff_read_idx = 0;
 /*"Booleans"*/
 int para_sair = 0, contadorTarefas = 0, espera = 0;
-/*Guarda os pids de todos os processos criados*/
-pid_t processos[MAXTAREFA];
 /*Guarda a pool de tarefas a usar no programa*/
 pthread_t tid[NUM_TRABALHADORAS];
 /*Condicoes para sincronizar as tarefas e as simulacoes*/
@@ -141,7 +121,7 @@ int main (int argc, char** argv) {
 	inicializarContas();
 
 	int fd;
-	fd = open("i-banco-pipe", O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+	fd = open(ficheiro, O_RDONLY | O_CREAT, S_IRUSR | S_IRGRP | S_IROTH);
 	if (fd == -1) {
 		perror("Erro a abrir o ficheiro indicado.\n");
     	exit(1);
@@ -194,8 +174,6 @@ int main (int argc, char** argv) {
 	}
 	/*Inicializacoes*/
 
-	printf("Bem-vinda/o ao i-banco\n\n");
-
 	while (1) {
 		;
 	}
@@ -205,24 +183,23 @@ int main (int argc, char** argv) {
 void *recebeComandos() {
 
 	while (!para_sair) {
-		/*Decrementa o semaforo de leitura (Espera para que possa ler do pipe)*/
-		sem_wait(&sem_ler);
 		/*Retorna se o utilizador introduziu o comando sair*/
 		if (para_sair) {
 			return NULL;
 		}
 
-		pthread_mutex_lock(&mutex_ler);
+		//pthread_mutex_lock(&mutex_ler);
 		/*Le o comando do pipe*/
-		int continua = 1;
-		int fd;
+		int fd, n, continua = 1;
 		comando_t com;
-		fd = open(ficheiro, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+		fd = open(ficheiro, O_RDONLY, S_IRUSR | S_IRGRP | S_IROTH);
 		if (fd == -1) {
 			perror("Erro a abrir o ficheiro indicado.\n");
 	    	exit(1);
 		}
-		if (read(fd, &com, sizeof(comando_t)) == -1) {
+		n = read(fd, &com, sizeof(comando_t));
+		while (n == 0) ;
+		if (n == -1) {
 			perror("Erro a ler o ficheiro indicado.\n");
     		exit(1);
 		}
@@ -230,7 +207,8 @@ void *recebeComandos() {
 			perror("Erro a fechar o ficheiro indicado.\n");
 	    	exit(1);
 		}
-		pthread_mutex_unlock(&mutex_ler);
+		//pthread_mutex_unlock(&mutex_ler);
+		puts("Lido um comando!");
 
 		/*Troca os indices das contas se o comando for transferir
 		e se a primeira conta tiver um indice maior que a primeira*/
