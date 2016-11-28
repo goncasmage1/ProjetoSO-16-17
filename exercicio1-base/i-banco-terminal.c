@@ -75,7 +75,7 @@ char buffer[BUFFER_SIZE];
 /*Nome do pipe a criar*/
 const char *ficheiro;
 
-int indice = 0, espera = 0;
+int indice = 0, espera = 0, fd_ter;
 /*Guarda os pids de todos os processos criados*/
 pid_t processos[MAXTAREFA];
 
@@ -86,19 +86,12 @@ pid_t processos[MAXTAREFA];
 int main(int argc, char** argv) {
 
 	if (argc == 2) {
-		/*
-		char* str1 = strdup(argv[1]);
-		char* str2 = ".txt";
-		if((ficheiro = malloc(strlen(str1)+strlen(str2)+1)) != NULL){
-		    ficheiro[0] = '\0';
-		    strcat(ficheiro,str1);
-		    strcat(ficheiro,str2);
-		} else {
-		    printf("Concatenacao falhou!\n");
-		    exit(0);
-		}
-		*/
 		ficheiro = strdup(argv[1]);
+		fd_ter = open(ficheiro, O_WRONLY);
+		if (fd_ter == -1) {
+			perror("Erro a abrir o ficheiro indicado.\n");
+	    	exit(1);
+		}
 	}
 	else {
 		printf("Erro: Nao foi especificado nenhum ficheiro como pipe.\n");
@@ -120,34 +113,18 @@ int main(int argc, char** argv) {
 			(numargs > 0 && (strcmp(args[0], COMANDO_SAIR) == 0))) {
 
 			/*FIX ME*/
-			/*
-			puts("i-banco vai terminar.\n--");
+			
 			int i, pid, status;
-			para_sair = 1;
-			*/
-
-			/*Forca todas as tarefas bloqueadas a avancar e terminarem-se*/
-			/*
-			for (i = 0; i < NUM_TRABALHADORAS; i++) {
-				sem_post(&sem_ler);
-			}
-			*/
-			/*Certifica-se de que todas as tarefas terminaram*/
-			/*
-			for (i = 0; i < NUM_TRABALHADORAS; i++) {
-				pthread_join(tid[i], NULL);
-			}
-			*/
+			
 			/*Sair agora - chama kill a todos os processos filho*/
-			/*
 			if (args[1] != NULL && (strcmp(args[1], COMANDO_SAIR_AGORA) == 0)) {
 				for (i = 0; i < indice; i++) {
 					kill(processos[i], SIGUSR1);
 				}
 			}
-			*/
+			
 			/*Termina os processos zombie antes de o programa acabar*/
-			/*
+			
 			for (i = 0; i < indice; i++) {
 				pid = wait(&status);
 				printf("FILHO TERMINADO (PID=%d; ", pid);
@@ -158,8 +135,13 @@ int main(int argc, char** argv) {
 					puts("terminou abruptamente)");
 				}
 			}
-			*/
-			/*FIX ME*/
+			
+
+			if (close(fd_ter) == -1) {
+				perror("Erro a fechar o ficheiro indicado.\n");
+		    	exit(1);
+			}
+
 			puts("\ni-banco-terminal terminou.\n");
 			return 0;
 		}
@@ -223,31 +205,13 @@ int main(int argc, char** argv) {
 					pthread_cond_wait(&pode_simular, &mutex_cond);
 				}
 				*/
-				int p[2];
-				if (pipe(p) < 0) {
-					return NULL;
-				}
 
 				/*Cria um processo filho*/
 				pid_t pid = fork();
 
 				/*O processo filho faz a simulacao*/
-				if (pid == 0) {
-					
-					close(tst(p[WRITE], p[READ]));
-					close(tst(0, 1));
-					dup(tst(p[READ], p[WRITE]));
-					close(tst(p[READ], p[WRITE]));
-					
-					char nome[] = "i-banco-sim-%ld.txt";
-					char pidlong[100];
-					long pidnumber = getpid();
-					sprintf(pidlong, nome, pidnumber);
-
-					printf("%s\n", pidlong);
-
-					puts("Comecou a simular");
-					simular(anos, pidlong);
+				if (pid == 0) {					
+					simular(anos);
 					exit(0);
 				}
 				/*O processo pai adiciona o pid do
@@ -278,12 +242,6 @@ void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas) {
 	//sem_wait(&sem_esc);
 	//pthread_mutex_lock(&mutex_esc);
 
-	int fd;
-	fd = open(ficheiro, O_WRONLY, S_IWUSR);
-	if (fd == -1) {
-		perror("Erro a abrir o ficheiro indicado.\n");
-    	exit(1);
-	}
 	/*Adiciona um comando ao pipe*/
 	comando_t com;
 	com.operacao = op;
@@ -292,12 +250,8 @@ void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas) {
 	com.valor = val;
 	com.com_conta_2 = duas_contas;
 
-	if (write(fd, &com, sizeof(comando_t)) == -1) {
+	if (write(fd_ter, &com, sizeof(comando_t)) == -1) {
 		perror("Erro a escrever no ficheiro indicado.\n");
-    	exit(1);
-	}
-	if (close(fd) == -1) {
-		perror("Erro a fechar o ficheiro indicado.\n");
     	exit(1);
 	}
 

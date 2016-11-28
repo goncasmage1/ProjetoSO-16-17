@@ -1,5 +1,9 @@
 #include "contas.h"
 #include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/syscall.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,18 +56,16 @@ int transferir(int idConta_1, int idConta_2, int valor) {
 	return -1;
 }
 
-void simular(int numAnos, char* fich) {
+void simular(int numAnos) {
 
-	//int fd;
+	char nome[] = "i-banco-sim-%ld.txt";
+	char pidlong[100];
+	long pidnumber = getpid();
+	sprintf(pidlong, nome, pidnumber);
 	
+	int fd = open(pidlong, O_WRONLY | O_CREAT, S_IWUSR | S_IROTH);
+	dup2(fd, 1);
 
-	/*
-	fd = open("pidlong", O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-	if (fd == -1) {
-		perror("Erro a abrir o ficheiro indicado.\n");
-    	exit(1);
-	}
-	*/
 	int novosSaldos[NUM_CONTAS], i, j, k;
 
 	/*Copia os saldos das contas para um novo vetor*/
@@ -87,13 +89,8 @@ void simular(int numAnos, char* fich) {
 			exit(EXIT_SUCCESS);
 		}
 	}
+	close(fd);
 	puts("\n");
-	/*
-	if (close(fd) == -1) {
-		perror("Erro a fechar o ficheiro indicado.\n");
-    	exit(1);
-	}
-	*/
 }
 
 void terminarASAP() {

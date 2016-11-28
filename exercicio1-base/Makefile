@@ -17,6 +17,6 @@ i-banco.o: i-banco.c contas.h
 	gcc $(CFLAGS) -c i-banco.c
 
 clean:
-	rm -f *.o main terminal i-banco-pipe log.txt
+	rm -f *.o *.txt main terminal i-banco-pipe
 
 CFLAGS = -g -Wall -pedantic

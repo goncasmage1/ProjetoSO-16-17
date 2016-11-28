@@ -91,7 +91,7 @@ void tarefaTransferir(comando_t comando);
 
 /*Nome do pipe a criar*/
 const char *ficheiro = "i-banco-pipe";
-int indice = 0, buff_write_idx = 0, buff_read_idx = 0;
+int indice = 0, buff_write_idx = 0, buff_read_idx = 0, fd_ban;
 /*"Booleans"*/
 int para_sair = 0, contadorTarefas = 0, espera = 0;
 /*Guarda a pool de tarefas a usar no programa*/
@@ -120,14 +120,15 @@ int main (int argc, char** argv) {
 	signal(SIGUSR1, terminarASAP);
 	inicializarContas();
 
-	int fd;
-	fd = open(ficheiro, O_RDONLY | O_CREAT, S_IRUSR | S_IRGRP | S_IROTH);
-	if (fd == -1) {
-		perror("Erro a abrir o ficheiro indicado.\n");
-    	exit(1);
+	unlink(ficheiro);
+
+	if (mkfifo(ficheiro, 0777) == -1) {
+		perror("Erro a criar o pipe!");
+		exit(0);
 	}
-	if (close(fd) == -1) {
-		perror("Erro a fechar o ficheiro indicado.\n");
+	fd_ban = open(ficheiro, O_RDONLY);
+	if (fd_ban == -1) {
+		perror("Erro a abrir o ficheiro indicado.\n");
     	exit(1);
 	}
 
@@ -175,6 +176,24 @@ int main (int argc, char** argv) {
 	/*Inicializacoes*/
 
 	while (1) {
+		/*
+		int i;
+		puts("i-banco vai terminar.\n--");
+		para_sair = 1;
+		*/
+
+		/*Forca todas as tarefas bloqueadas a avancar e terminarem-se*/
+		/*
+		for (i = 0; i < NUM_TRABALHADORAS; i++) {
+			sem_post(&sem_ler);
+		}
+		*/
+		/*Certifica-se de que todas as tarefas terminaram*/
+		/*
+		for (i = 0; i < NUM_TRABALHADORAS; i++) {
+			pthread_join(tid[i], NULL);
+		}
+		*/
 		;
 	}
 	return 0;
@@ -190,23 +209,11 @@ void *recebeComandos() {
 
 		//pthread_mutex_lock(&mutex_ler);
 		/*Le o comando do pipe*/
-		int fd, n, continua = 1;
+		int n, continua = 1;
 		comando_t com;
-		fd = open(ficheiro, O_RDONLY, S_IRUSR | S_IRGRP | S_IROTH);
-		if (fd == -1) {
-			perror("Erro a abrir o ficheiro indicado.\n");
-	    	exit(1);
-		}
-		n = read(fd, &com, sizeof(comando_t));
-		while (n == 0) ;
-		if (n == -1) {
-			perror("Erro a ler o ficheiro indicado.\n");
-    		exit(1);
-		}
-		if (close(fd) == -1) {
-			perror("Erro a fechar o ficheiro indicado.\n");
-	    	exit(1);
-		}
+
+		while ((n = read(fd_ban, &com, sizeof(comando_t))) <= 0) ;
+
 		//pthread_mutex_unlock(&mutex_ler);
 		puts("Lido um comando!");
 
@@ -315,45 +322,29 @@ void *recebeComandos() {
 
 void tarefaDebitar(comando_t comando) {
 	FILE* file = fopen("log.txt", "a");
-	if (debitar (comando.idConta_1, comando.valor) < 0)
-		//printf("%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
-		;
-	else
-		fprintf(file, "%ld: %s\n", gettid(), COMANDO_DEBITAR);
-		//printf("%s(%d, %d): OK\n\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
+	if (!(debitar (comando.idConta_1, comando.valor) < 0))
+		fprintf(file, "%ld: %s(%d, %d): OK\n\n", gettid(), COMANDO_DEBITAR, comando.idConta_1, comando.valor);
 	fclose(file);
 }
 
 void tarefaCreditar(comando_t comando) {
 	FILE* file = fopen("log.txt", "a");
-	if (creditar (comando.idConta_1, comando.valor) < 0)
-		//printf("%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
-		;
-	else
-		fprintf(file, "%ld: %s\n", gettid(), COMANDO_CREDITAR);
-		//printf("%s(%d, %d): OK\n\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
+	if (!(creditar (comando.idConta_1, comando.valor) < 0))
+		fprintf(file, "%ld: %s(%d, %d): OK\n\n", gettid(), COMANDO_CREDITAR, comando.idConta_1, comando.valor);
 	fclose(file);
 }
 
 void tarefaLerSaldo(comando_t comando) {
 	FILE* file = fopen("log.txt", "a");
 	int saldo = lerSaldo(comando.idConta_1);
-	if (saldo < 0)
-		//printf("%s(%d): Erro.\n\n", COMANDO_LER_SALDO, comando.idConta_1);
-		;
-	else
-		fprintf(file, "%ld: %s\n", gettid(), COMANDO_LER_SALDO);
-		//printf("%s(%d): O saldo da conta é %d.\n\n", COMANDO_LER_SALDO, comando.idConta_1, saldo);
+	if (!(saldo < 0))
+		fprintf(file, "%ld: %s(%d): O saldo da conta é %d.\n\n", gettid(), COMANDO_LER_SALDO, comando.idConta_1, saldo);
 	fclose(file);
 }
 
 void tarefaTransferir(comando_t comando) {
 	FILE* file = fopen("log.txt", "a");
-	if (transferir(comando.idConta_1, comando.idConta_2, comando.valor) < 0)
-		//printf("Erro ao transferir %d da conta %d para a conta %d.\n\n", comando.valor, comando.idConta_1, comando.idConta_2);
-		;
-	else
-		fprintf(file, "%ld: %s\n", gettid(), COMANDO_TRANSFERIR);
-		//printf("%s(%d, %d, %d): OK\n\n", COMANDO_TRANSFERIR, comando.idConta_1, comando.idConta_2, comando.valor);
+	if (!(transferir(comando.idConta_1, comando.idConta_2, comando.valor) < 0))
+		fprintf(file, "%ld: %s(%d, %d, %d): OK\n\n", gettid(), COMANDO_TRANSFERIR, comando.idConta_1, comando.idConta_2, comando.valor);
 	fclose(file);
 }
