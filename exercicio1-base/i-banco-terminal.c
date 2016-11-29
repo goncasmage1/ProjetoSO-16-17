@@ -31,10 +31,9 @@
 #define CREDITAR 2
 #define LER_SALDO 3
 #define TRANSFERIR 4
-
-#define READ 0
-#define WRITE 1
-#define tst(a,b) (mode== READ ? (b) : (a))
+#define TRANSFERIR 4
+#define SAIR 5
+#define SAIR_AGORA 6
 
 #define MAXARGS 4
 #define BUFFER_SIZE 100

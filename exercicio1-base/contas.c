@@ -15,12 +15,12 @@ int contasSaldos[NUM_CONTAS];
 int terminarAgora;
 
 int contaExiste(int idConta) {
-	return (idConta > 0 && idConta <= NUM_CONTAS);
+	return (idConta > 0 && idConta <= (NUM_CONTAS + 1));
 }
 
 void inicializarContas() {
 	int i;
-	for (i = 0 ; i < NUM_CONTAS; i++)
+	for (i = 0 ; i < (NUM_CONTAS + 1); i++)
 		contasSaldos[i] = 0;
 }
 
@@ -63,7 +63,7 @@ void simular(int numAnos) {
 	long pidnumber = getpid();
 	sprintf(pidlong, nome, pidnumber);
 	
-	int fd = open(pidlong, O_WRONLY | O_CREAT, S_IWUSR | S_IROTH);
+	int fd = open(pidlong, O_WRONLY | O_CREAT, 0666);
 	dup2(fd, 1);
 
 	int novosSaldos[NUM_CONTAS], i, j, k;
@@ -89,8 +89,8 @@ void simular(int numAnos) {
 			exit(EXIT_SUCCESS);
 		}
 	}
-	close(fd);
 	puts("\n");
+	close(fd);
 }
 
 void terminarASAP() {
