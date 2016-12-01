@@ -15,12 +15,12 @@ int contasSaldos[NUM_CONTAS];
 int terminarAgora;
 
 int contaExiste(int idConta) {
-	return (idConta > 0 && idConta <= (NUM_CONTAS + 1));
+	return (idConta > 0 && idConta <= NUM_CONTAS);
 }
 
 void inicializarContas() {
 	int i;
-	for (i = 0 ; i < (NUM_CONTAS + 1); i++)
+	for (i = 0 ; i < NUM_CONTAS; i++)
 		contasSaldos[i] = 0;
 }
 
@@ -63,7 +63,11 @@ void simular(int numAnos) {
 	long pidnumber = getpid();
 	sprintf(pidlong, nome, pidnumber);
 	
-	int fd = open(pidlong, O_WRONLY | O_CREAT, 0666);
+	int fd = open(pidlong, O_WRONLY | O_APPEND | O_CREAT, 0777);
+	if (fd == -1) {
+		perror("Erro a abrir o ficheiro.\n");
+    	exit(1);
+	}
 	dup2(fd, 1);
 
 	int novosSaldos[NUM_CONTAS], i, j, k;
@@ -88,6 +92,7 @@ void simular(int numAnos) {
 			puts("Simulacao terminada por signal");
 			exit(EXIT_SUCCESS);
 		}
+		puts("\n");
 	}
 	puts("\n");
 	close(fd);

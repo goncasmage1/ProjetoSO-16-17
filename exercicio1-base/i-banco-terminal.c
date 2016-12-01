@@ -31,14 +31,15 @@
 #define CREDITAR 2
 #define LER_SALDO 3
 #define TRANSFERIR 4
-#define TRANSFERIR 4
-#define SAIR 5
-#define SAIR_AGORA 6
+#define SIMULAR 5
+#define SAIR 6
+#define SAIR_AGORA 7
 
 #define MAXARGS 4
 #define BUFFER_SIZE 100
 #define MAXTAREFA 20
 #define CMD_BUFFER_DIM  (NUM_TRABALHADORAS * 2)
+#define PERM 0777
 
 /*struct que representa um comando introduzido pelo utilizador*/
 typedef struct
@@ -64,7 +65,7 @@ typedef struct
 								deve ser considerado
 *	Returns: 	void
 **********************************************************************/
-void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas);
+void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas, long pid);
 
 
 /**Variaveis globais*/
@@ -77,7 +78,6 @@ const char *ficheiro;
 int indice = 0, espera = 0, fd_ter;
 /*Guarda os pids de todos os processos criados*/
 pid_t processos[MAXTAREFA];
-
 
 /**Variaveis globais*/
 
@@ -97,6 +97,15 @@ int main(int argc, char** argv) {
     	exit(1);
 	}
 
+	char nome[] = "terminal-%ld";
+	char private_pipe[100];
+	long pidnumber = getpid();
+	sprintf(private_pipe, nome, pidnumber);
+	if (mkfifo(private_pipe, PERM) == -1) {
+		perror("Erro a criar o pipe!");
+		exit(0);
+	}
+
 	printf("Bem-vinda/o ao i-banco\n\n");
 
 	while (1) {
@@ -111,30 +120,23 @@ int main(int argc, char** argv) {
 		else if (numargs < 0 ||
 			(numargs > 0 && (strcmp(args[0], COMANDO_SAIR) == 0))) {
 
-			/*FIX ME*/
-			
-			int i, pid, status;
-			
-			/*Sair agora - chama kill a todos os processos filho*/
 			if (args[1] != NULL && (strcmp(args[1], COMANDO_SAIR_AGORA) == 0)) {
-				for (i = 0; i < indice; i++) {
-					kill(processos[i], SIGUSR1);
-				}
+				novaTarefa(SAIR_AGORA, -1, -1, -1, 0, getpid());
+				novaTarefa(SAIR_AGORA, -1, -1, -1, 0, getpid());
+				novaTarefa(SAIR_AGORA, -1, -1, -1, 0, getpid());
+				novaTarefa(SAIR_AGORA, -1, -1, -1, 0, getpid());
+				continue;
 			}
-			
-			/*Termina os processos zombie antes de o programa acabar*/
-			
-			for (i = 0; i < indice; i++) {
-				pid = wait(&status);
-				printf("FILHO TERMINADO (PID=%d; ", pid);
+			novaTarefa(SAIR, -1, -1, -1, 0, getpid());
+			novaTarefa(SAIR, -1, -1, -1, 0, getpid());
+			novaTarefa(SAIR, -1, -1, -1, 0, getpid());
+			novaTarefa(SAIR, -1, -1, -1, 0, getpid());
+		}
 
-				if (status == 0) {
-					puts("terminou normalmente)");
-				} else {
-					puts("terminou abruptamente)");
-				}
-			}
-			
+		/* Sair terminal */
+		else if (strcmp(args[0], COMANDO_SAIR_TERMINAL) == 0) {
+
+			puts("\ni-banco-terminal vai terminar.\n");		
 
 			if (close(fd_ter) == -1) {
 				perror("Erro a fechar o ficheiro indicado.\n");
@@ -144,11 +146,6 @@ int main(int argc, char** argv) {
 			puts("\ni-banco-terminal terminou.\n");
 			return 0;
 		}
-
-		/* Sair terminal */
-		else if (strcmp(args[0], COMANDO_SAIR_TERMINAL) == 0) {
-
-		}
 			
 		/* Debitar */
 		else if (strcmp(args[0], COMANDO_DEBITAR) == 0) {
@@ -157,7 +154,7 @@ int main(int argc, char** argv) {
 				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_DEBITAR);
 				continue;
 			}
-			novaTarefa(DEBITAR, atoi(args[1]), -1, atoi(args[2]), 0);
+			novaTarefa(DEBITAR, atoi(args[1]), -1, atoi(args[2]), 0, getpid());
 		}
 
 		/* Creditar */
@@ -166,7 +163,7 @@ int main(int argc, char** argv) {
 				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_CREDITAR);
 				continue;
 			}
-			novaTarefa(CREDITAR, atoi(args[1]), -1, atoi(args[2]), 0);
+			novaTarefa(CREDITAR, atoi(args[1]), -1, atoi(args[2]), 0, getpid());
 		}
 
 		/* Ler Saldo */
@@ -175,7 +172,7 @@ int main(int argc, char** argv) {
 				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_LER_SALDO);
 				continue;
 			}
-			novaTarefa(LER_SALDO, atoi(args[1]), -1, 0, 0);
+			novaTarefa(LER_SALDO, atoi(args[1]), -1, 0, 0, getpid());
 		}
 
 		/* Transferir */
@@ -184,50 +181,12 @@ int main(int argc, char** argv) {
 				printf("%s: Sintaxe inválida, tente de novo.\n", COMANDO_TRANSFERIR);
 				continue;
 			}
-			novaTarefa(TRANSFERIR, atoi(args[1]), atoi(args[2]), atoi(args[3]), 1);
+			novaTarefa(TRANSFERIR, atoi(args[1]), atoi(args[2]), atoi(args[3]), 1, getpid());
 		}
 
 		/* Simular */
 		else if (strcmp(args[0], COMANDO_SIMULAR) == 0) {
-
-
-			int anos = atoi(args[1]);
-
-			/*Se o numero de anos for valido*/
-			if (anos > 0) {
-
-				/*Aguarda que todas as tarefas que estao a ser executadas terminem*/
-				espera = 1;
-				/*FIX ME*/
-				/*
-				while (contadorTarefas > 0 || buff_write_idx != buff_read_idx) {
-					pthread_cond_wait(&pode_simular, &mutex_cond);
-				}
-				*/
-
-				/*Cria um processo filho*/
-				pid_t pid = fork();
-
-				/*O processo filho faz a simulacao*/
-				if (pid == 0) {					
-					simular(anos);
-					exit(0);
-				}
-				/*O processo pai adiciona o pid do
-				processo filho ao vetor de pid's */
-				else if (pid > 0){
-					processos[indice++] = pid;
-
-					/*Indica que as tarefas podem resumir as operacoes*/
-					espera = 0;
-				}
-				else {
-					puts("Erro a criar o processo filho");
-				}
-			}
-			else 
-				printf("Numero de anos invalido\n");
-			
+			novaTarefa(SIMULAR, atoi(args[1]), -1, -1, 0, getpid());			
 		} else {
 			printf("Comando desconhecido. Tente de novo.\n");
 		}
@@ -235,7 +194,7 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
-void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas) {
+void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas, long pid) {
 
 	/*Decrementa o semaforo de escrita (Indica que o pipe tem um comando novo para ler)*/
 	//sem_wait(&sem_esc);
@@ -248,6 +207,7 @@ void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas) {
 	com.idConta_2 = id_2;
 	com.valor = val;
 	com.com_conta_2 = duas_contas;
+	com.process_id = pid;
 
 	if (write(fd_ter, &com, sizeof(comando_t)) == -1) {
 		perror("Erro a escrever no ficheiro indicado.\n");

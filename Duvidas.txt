@@ -1,0 +1,3 @@
+Quando o terminal manda sair o i-banco, o que acontece ao pipe (o de escrita e de leitura)?
+O simular deve esperar que as tarefas acabem?
+Ja nao e preciso trincos?
