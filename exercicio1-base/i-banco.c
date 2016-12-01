@@ -37,6 +37,7 @@
 
 #define NUM_TRABALHADORAS 3
 #define CMD_BUFFER_DIM  (NUM_TRABALHADORAS * 2)
+#define MAXTAREFA 20
 #define LOGBUFSIZE 100
 #define PERM 0777
 
@@ -60,6 +61,16 @@ typedef struct
 *	Returns: 	void
 **********************************************************************/
 void *recebeComandos();
+
+/*********************************************************************
+*	registaLog(comando_t comando):
+*
+*	Descricao:	Funcao que regista a atividade no log
+*	Parametros: comando -	Informacoes sobre o comando a processar
+*	Returns: 	void
+**********************************************************************/
+void registaLog(comando_t com);
+
 /*********************************************************************
 *	tarefaDebitar(comando_t comando):
 *
@@ -68,6 +79,7 @@ void *recebeComandos();
 *	Returns: 	void
 **********************************************************************/
 void tarefaDebitar(comando_t comando);
+
 /*********************************************************************
 *	tarefaCreditar(comando_t comando):
 *
@@ -76,6 +88,7 @@ void tarefaDebitar(comando_t comando);
 *	Returns: 	void
 **********************************************************************/
 void tarefaCreditar(comando_t comando);
+
 /*********************************************************************
 *	tarefaLerSaldo(comando_t comando):
 *
@@ -119,6 +132,8 @@ const char* log_file = "log.txt";
 int indice = 0, buff_write_idx = 0, buff_read_idx = 0, fd_ban;
 /*"Booleans"*/
 int para_sair = 0, sair_agora = 0, contadorTarefas = 0, espera = 0;
+/*Guarda os pids de todos os processos criados*/
+pid_t processos[MAXTAREFA];
 /*Guarda a pool de tarefas a usar no programa*/
 pthread_t tid[NUM_TRABALHADORAS];
 /*Condicoes para sincronizar as tarefas e as simulacoes*/
@@ -152,9 +167,9 @@ int main (int argc, char** argv) {
 		perror("Erro a criar o pipe!");
 		exit(0);
 	}
-	fd_ban = open(ficheiro, O_RDONLY);
+	fd_ban = open(ficheiro, O_RDONLY | O_NONBLOCK);
 	if (fd_ban == -1) {
-		perror("Erro a abrir o ficheiro indicado.\n");
+		perror("Erro a abrir o pipe 1.\n");
     	exit(1);
 	}
 
@@ -235,7 +250,8 @@ int main (int argc, char** argv) {
 		} else {
 			puts("terminou abruptamente)");
 		}
-	}	
+	}
+	puts("i-banco terminou.\n--");
 	return 0;
 }
 
@@ -266,8 +282,8 @@ void *recebeComandos() {
 			tarefaSimular(com);
 			continua = 0;
 		}
+		int conta_1, conta_2;
 		if (continua) {
-			int conta_1, conta_2;
 			if (com.com_conta_2) {
 				conta_1 = (com.idConta_1 < com.idConta_2) ? (com.idConta_1 - 1) : (com.idConta_2 - 1);
 				conta_2 = (com.idConta_1 < com.idConta_2) ? (com.idConta_2 - 1) : (com.idConta_1 - 1);
@@ -282,59 +298,61 @@ void *recebeComandos() {
 				conta_2 = (com.idConta_2 - 1);
 			}
 		}
+		registaLog(com);
 
-		contadorTarefas++;
-		/*Verifica se as contas especificadas nao estao a ser acedidas
-		e se sao validas*/
-		if (contaExiste(conta_1 + 1) && continua) {
-			sem_wait(&sem_contas[conta_1]);
-			pthread_mutex_lock(&mutex_contas[conta_1]);
-			printf("Trancado indice %d\n", conta_1);
+		if (continua) {
+			contadorTarefas++;
+			/*Verifica se as contas especificadas nao estao a ser acedidas
+			e se sao validas*/
+			if (contaExiste(conta_1 + 1)) {
+				sem_wait(&sem_contas[conta_1]);
+				pthread_mutex_lock(&mutex_contas[conta_1]);
 
-			if (com.com_conta_2) {
-				if (contaExiste(conta_2 + 1)) {
-					sem_wait(&sem_contas[conta_2]);
-					pthread_mutex_lock(&mutex_contas[conta_2]);
-					printf("Trancado indice %d\n", conta_2);
+				if (com.com_conta_2) {
+					if (contaExiste(conta_2 + 1)) {
+						sem_wait(&sem_contas[conta_2]);
+						pthread_mutex_lock(&mutex_contas[conta_2]);
+					}
+					/*Imprime erro na introducao da conta*/
+					else {
+						printf("Erro ao transferir %d da conta %d para a conta %d.\n\n", com.valor, com.idConta_1, com.idConta_2);
+						continua = 0;
+					}
 				}
-				/*Imprime erro na introducao da conta*/
-				else {
-					printf("Erro ao transferir %d da conta %d para a conta %d.\n\n", com.valor, com.idConta_1, com.idConta_2);
-					continua = 0;
+				/*Se nao houver erro na introducao da segunda conta*/
+				if (continua) {
+					switch (com.operacao) {
+						case DEBITAR:
+							tarefaDebitar(com);
+							break;
+
+						case CREDITAR:
+							tarefaCreditar(com);
+							break;
+
+						case LER_SALDO:
+							tarefaLerSaldo(com);
+							break;
+
+						case TRANSFERIR:
+							if ((com.com_conta_2) && (contaExiste(com.idConta_2))) {
+								tarefaTransferir(com);
+							}
+							break;
+					}
+
+					if ((com.com_conta_2) && (contaExiste(conta_2 + 1))) {
+						pthread_mutex_unlock(&mutex_contas[conta_2]);
+						sem_post(&sem_contas[conta_2]);
+					}
+
+					pthread_mutex_unlock(&mutex_contas[conta_1]);
+					sem_post(&sem_contas[conta_1]);
 				}
 			}
-			/*Se nao houver erro na introducao da segunda conta*/
-			if (continua) {
-				switch (com.operacao) {
-					case DEBITAR:
-						tarefaDebitar(com);
-						break;
-
-					case CREDITAR:
-						tarefaCreditar(com);
-						break;
-
-					case LER_SALDO:
-						tarefaLerSaldo(com);
-						break;
-
-					case TRANSFERIR:
-						if ((com.com_conta_2) && (contaExiste(com.idConta_2))) {
-							tarefaTransferir(com);
-						}
-						break;
-				}
-
-				if ((com.com_conta_2) && (contaExiste(conta_2 + 1))) {
-					pthread_mutex_unlock(&mutex_contas[conta_2]);
-					sem_post(&sem_contas[conta_2]);
-				}
-
-				pthread_mutex_unlock(&mutex_contas[conta_1]);
-				sem_post(&sem_contas[conta_1]);
-			}
+			contadorTarefas--;
 		}
-		contadorTarefas--;
+
 		/*Verifica se ainda ha tarefas a executar operacoes,
 		se nao houverem liberta o trinco condicional do comando simular*/
 		if (espera && contadorTarefas == 0 && buff_write_idx == buff_read_idx) {
@@ -370,71 +388,165 @@ void *recebeComandos() {
 	return NULL;
 }
 
+void registaLog(comando_t com) {
+	int new_fd;
+	char buf[LOGBUFSIZE];
+
+	switch (com.operacao) {
+		case DEBITAR:
+			new_fd = open(log_file, O_WRONLY | O_APPEND | O_CREAT, PERM);
+			if (new_fd == -1) {
+				perror("Erro a abrir o log.\n");
+		    	exit(1);
+			}
+			if (!(debitar (com.idConta_1, com.valor) < 0)){
+				snprintf(buf, LOGBUFSIZE, "%ld: %s %d %d\n", gettid(), COMANDO_DEBITAR, com.idConta_1, com.valor);
+				write(new_fd, buf, sizeof(char) * strlen(buf));
+			}
+			if (close(new_fd) == -1) {
+				perror("Erro a fechar o log.\n");
+		    	exit(1);
+			}
+			break;
+
+		case CREDITAR:
+			new_fd = open(log_file, O_WRONLY | O_APPEND | O_CREAT, PERM);
+			if (new_fd == -1) {
+				perror("Erro a abrir o log.\n");
+		    	exit(1);
+			}
+			if (!(creditar (com.idConta_1, com.valor) < 0)){
+				snprintf(buf, LOGBUFSIZE, "%ld: %s %d %d\n", gettid(), COMANDO_CREDITAR, com.idConta_1, com.valor);
+				write(new_fd, buf, sizeof(char) * strlen(buf));
+			}
+			if (close(new_fd) == -1) {
+				perror("Erro a fechar o log.\n");
+		    	exit(1);
+			}
+			break;
+
+		case LER_SALDO:
+			new_fd = open(log_file, O_WRONLY | O_APPEND | O_CREAT, PERM);
+			if (new_fd == -1) {
+				perror("Erro a abrir o log.\n");
+				exit(1);
+			}
+			int saldo = lerSaldo(com.idConta_1);
+			if (!(saldo < 0)){
+				snprintf(buf, LOGBUFSIZE, "%ld: %s %d\n", gettid(), COMANDO_LER_SALDO, com.idConta_1);
+				write(new_fd, buf, sizeof(char) * strlen(buf));
+			}
+			if (close(new_fd) == -1) {
+				perror("Erro a fechar o log.\n");
+				exit(1);
+			}
+			break;
+
+		case TRANSFERIR:
+			new_fd = open(log_file, O_WRONLY | O_APPEND | O_CREAT, PERM);
+			if (new_fd == -1) {
+				perror("Erro a abrir o log.\n");
+		    	exit(1);
+			}
+			if (!(transferir(com.idConta_1, com.idConta_2, com.valor) < 0)){
+				snprintf(buf, LOGBUFSIZE, "%ld: %s %d %d %d\n", gettid(), COMANDO_TRANSFERIR, com.idConta_1, com.idConta_2, com.valor);
+				write(new_fd, buf, sizeof(char) * strlen(buf));
+			}
+			if (close(new_fd) == -1) {
+				perror("Erro a fechar o log.\n");
+		    	exit(1);
+			}
+			break;
+	}
+}
+
 void tarefaDebitar(comando_t comando) {
-	int fd = open(log_file, O_WRONLY | O_APPEND | O_CREAT, PERM);
-	if (fd == -1) {
-		perror("Erro a abrir o log.\n");
+	char nome[] = "terminal-%ld";
+	char pidlong[100];
+	long pidnumber = comando.process_id;
+	sprintf(pidlong, nome, pidnumber);
+	
+	int fd_pipe = open(pidlong, O_WRONLY);
+	if (fd_pipe == -1) {
+		perror("Erro a abrir o pipe.\n");
     	exit(1);
 	}
 	char buf[LOGBUFSIZE];
 	if (!(debitar (comando.idConta_1, comando.valor) < 0)){
-		snprintf(buf, LOGBUFSIZE, "%ld: %s(%d, %d): OK\n\n", gettid(), COMANDO_DEBITAR, comando.idConta_1, comando.valor);
-		write(fd, buf, sizeof(char) * strlen(buf));
+		snprintf(buf, LOGBUFSIZE, "%s(%d, %d): OK\n\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
+		write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
 	}
-	if (close(fd) == -1) {
-		perror("Erro a fechar o log.\n");
+	if (close(fd_pipe) == -1) {
+		perror("Erro a fechar o pipe.\n");
     	exit(1);
 	}
 }
 
 void tarefaCreditar(comando_t comando) {
-	int fd = open(log_file, O_WRONLY | O_APPEND | O_CREAT, PERM);
-	if (fd == -1) {
-		perror("Erro a abrir o log.\n");
+	char nome[] = "terminal-%ld";
+	char pidlong[100];
+	long pidnumber = comando.process_id;
+	sprintf(pidlong, nome, pidnumber);
+	
+	int fd_pipe = open(pidlong, O_WRONLY);
+	if (fd_pipe == -1) {
+		perror("Erro a abrir o pipe.\n");
     	exit(1);
 	}
 	char buf[LOGBUFSIZE];
 	if (!(creditar (comando.idConta_1, comando.valor) < 0)){
-		snprintf(buf, LOGBUFSIZE, "%ld: %s(%d, %d): OK\n\n", gettid(), COMANDO_CREDITAR, comando.idConta_1, comando.valor);
-		write(fd, buf, sizeof(char) * strlen(buf));
+		snprintf(buf, LOGBUFSIZE, "%s(%d, %d): OK\n\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
+		write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
 	}
-	if (close(fd) == -1) {
-		perror("Erro a fechar o log.\n");
+	if (close(fd_pipe) == -1) {
+		perror("Erro a fechar o pipe.\n");
     	exit(1);
 	}
 }
 
 void tarefaLerSaldo(comando_t comando) {
-	int fd = open(log_file, O_WRONLY | O_APPEND | O_CREAT, PERM);
-	if (fd == -1) {
-		perror("Erro a abrir o log.\n");
+
+	char nome[] = "terminal-%ld";
+	char pidlong[100];
+	long pidnumber = comando.process_id;
+	sprintf(pidlong, nome, pidnumber);
+
+	int fd_pipe = open(pidlong, O_WRONLY);
+	if (fd_pipe == -1) {
+		perror("Erro a abrir o pipe.\n");
     	exit(1);
 	}
 	char buf[LOGBUFSIZE];
 	int saldo = lerSaldo(comando.idConta_1);
 	if (!(saldo < 0)){
-		snprintf(buf, LOGBUFSIZE, "%ld: %s(%d): O saldo da conta é %d.\n\n", gettid(), COMANDO_LER_SALDO, comando.idConta_1, saldo);
-		write(fd, buf, sizeof(char) * strlen(buf));
+		snprintf(buf, LOGBUFSIZE, "%s(%d): O saldo da conta é %d.\n\n", COMANDO_LER_SALDO, comando.idConta_1, saldo);
+		write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
 	}
-	if (close(fd) == -1) {
-		perror("Erro a fechar o log.\n");
+	if (close(fd_pipe) == -1) {
+		perror("Erro a fechar o pipe.\n");
     	exit(1);
 	}
 }
 
 void tarefaTransferir(comando_t comando) {
-	int fd = open(log_file, O_WRONLY | O_APPEND | O_CREAT, PERM);
-	if (fd == -1) {
-		perror("Erro a abrir o log.\n");
+
+	char nome[] = "terminal-%ld";
+	char pidlong[100];
+	long pidnumber = comando.process_id;
+	sprintf(pidlong, nome, pidnumber);
+	
+	int fd_pipe = open(pidlong, O_WRONLY);
+	if (fd_pipe == -1) {
+		perror("Erro a abrir o pipe.\n");
     	exit(1);
 	}
 	char buf[LOGBUFSIZE];
 	if (!(transferir(comando.idConta_1, comando.idConta_2, comando.valor) < 0)){
-		snprintf(buf, LOGBUFSIZE, "%ld: %s(%d, %d, %d): OK\n\n", gettid(), COMANDO_TRANSFERIR, comando.idConta_1, comando.idConta_2, comando.valor);
-		write(fd, buf, sizeof(char) * strlen(buf));
+		snprintf(buf, LOGBUFSIZE, "%s(%d, %d, %d): OK\n\n", COMANDO_TRANSFERIR, comando.idConta_1, comando.idConta_2, comando.valor);
+		write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
 	}
-	if (close(fd) == -1) {
-		perror("Erro a fechar o log.\n");
+	if (close(fd_pipe) == -1) {
+		perror("Erro a fechar o pipe.\n");
     	exit(1);
 	}
 }

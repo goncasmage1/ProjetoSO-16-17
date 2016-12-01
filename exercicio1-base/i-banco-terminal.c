@@ -37,8 +37,8 @@
 
 #define MAXARGS 4
 #define BUFFER_SIZE 100
-#define MAXTAREFA 20
 #define CMD_BUFFER_DIM  (NUM_TRABALHADORAS * 2)
+#define LOGBUFSIZE 100
 #define PERM 0777
 
 /*struct que representa um comando introduzido pelo utilizador*/
@@ -50,6 +50,7 @@ typedef struct
 	int valor;
 	/*Indica se precisamos de considerar o valor da conta 2*/
 	int com_conta_2;
+	long process_id;
 } comando_t;
 
 /*********************************************************************
@@ -75,9 +76,7 @@ char buffer[BUFFER_SIZE];
 /*Nome do pipe a criar*/
 const char *ficheiro;
 
-int indice = 0, espera = 0, fd_ter;
-/*Guarda os pids de todos os processos criados*/
-pid_t processos[MAXTAREFA];
+int indice = 0, espera = 0, fd_ter, fd_leit;
 
 /**Variaveis globais*/
 
@@ -96,7 +95,6 @@ int main(int argc, char** argv) {
 		printf("Erro: Nao foi especificado nenhum ficheiro como pipe.\n");
     	exit(1);
 	}
-
 	char nome[] = "terminal-%ld";
 	char private_pipe[100];
 	long pidnumber = getpid();
@@ -105,7 +103,11 @@ int main(int argc, char** argv) {
 		perror("Erro a criar o pipe!");
 		exit(0);
 	}
-
+	fd_leit = open(private_pipe, O_RDONLY | O_NONBLOCK);
+	if (fd_leit == -1) {
+		perror("Erro a abrir o pipe.\n");
+    	exit(1);
+	}
 	printf("Bem-vinda/o ao i-banco\n\n");
 
 	while (1) {
@@ -142,8 +144,13 @@ int main(int argc, char** argv) {
 				perror("Erro a fechar o ficheiro indicado.\n");
 		    	exit(1);
 			}
+			if (close(fd_leit) == -1) {
+				perror("Erro a fechar o ficheiro indicado.\n");
+		    	exit(1);
+			}
+			unlink(private_pipe);
 
-			puts("\ni-banco-terminal terminou.\n");
+			puts("i-banco-terminal terminou.\n");
 			return 0;
 		}
 			
@@ -155,6 +162,10 @@ int main(int argc, char** argv) {
 				continue;
 			}
 			novaTarefa(DEBITAR, atoi(args[1]), -1, atoi(args[2]), 0, getpid());
+			char buf[LOGBUFSIZE];
+			int n;
+			while ((n = read(fd_leit, buf, sizeof(char) * LOGBUFSIZE)) <= 0) ;
+			printf("%s\n", buf);
 		}
 
 		/* Creditar */
@@ -164,6 +175,10 @@ int main(int argc, char** argv) {
 				continue;
 			}
 			novaTarefa(CREDITAR, atoi(args[1]), -1, atoi(args[2]), 0, getpid());
+			char buf[LOGBUFSIZE];
+			int n;
+			while ((n = read(fd_leit, buf, sizeof(char) * LOGBUFSIZE)) <= 0) ;
+			printf("%s\n", buf);
 		}
 
 		/* Ler Saldo */
@@ -173,6 +188,10 @@ int main(int argc, char** argv) {
 				continue;
 			}
 			novaTarefa(LER_SALDO, atoi(args[1]), -1, 0, 0, getpid());
+			char buf[LOGBUFSIZE];
+			int n;
+			while ((n = read(fd_leit, buf, sizeof(char) * LOGBUFSIZE)) <= 0) ;
+			printf("%s\n", buf);
 		}
 
 		/* Transferir */
@@ -182,6 +201,10 @@ int main(int argc, char** argv) {
 				continue;
 			}
 			novaTarefa(TRANSFERIR, atoi(args[1]), atoi(args[2]), atoi(args[3]), 1, getpid());
+			char buf[LOGBUFSIZE];
+			int n;
+			while ((n = read(fd_leit, buf, sizeof(char) * LOGBUFSIZE)) <= 0) ;
+			printf("%s\n", buf);
 		}
 
 		/* Simular */
