@@ -11,7 +11,6 @@
 #include <sys/syscall.h>
 #include <fcntl.h>
 #include <pthread.h>
-#include <time.h>
 #include <semaphore.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -72,6 +71,15 @@ void *recebeComandos();
 void registaLog(comando_t com);
 
 /*********************************************************************
+*	notificaErro(comando_t comando):
+*
+*	Descricao:	Funcao que notifica ao terminal que ocorreu um erro
+*	Parametros: comando -	Informacoes sobre o comando a processar
+*	Returns: 	void
+**********************************************************************/
+void notificaErro(comando_t com);
+
+/*********************************************************************
 *	tarefaDebitar(comando_t comando):
 *
 *	Descricao:	Funcao chamada pela tarefa ao executar o comando "debitar"
@@ -124,6 +132,14 @@ void tarefaSimular(comando_t comando);
 **********************************************************************/
 void tarefaSair();
 
+/*********************************************************************
+*	tarefaSairAgora():
+*
+*	Descricao : Funcao chamada pela tarefa ao executar o comando "sair agora"
+*	Returns: 	void
+**********************************************************************/
+void tarefaSairAgora();
+
 /**Variaveis globais*/
 
 /*Nome do pipe a criar*/
@@ -145,12 +161,12 @@ comando_t cmd_buffer[CMD_BUFFER_DIM];
 	1 trinco de leitura
 	1 trinco de condicao
 	N trincos para cada uma das contas*/
-pthread_mutex_t mutex_esc, mutex_ler, mutex_cond, mutex_contas[NUM_CONTAS];
+pthread_mutex_t mutex_cond, mutex_contas[NUM_CONTAS];
 /*Declaracao de semaforos
 	1 semaforo de leitura
 	1 semaforo de escritura
 	N semaforos para cada uma das contas*/
-sem_t sem_ler, sem_esc, sem_contas[NUM_CONTAS];
+sem_t sem_contas[NUM_CONTAS];
 
 /**Variaveis globais*/
 
@@ -160,41 +176,25 @@ int main (int argc, char** argv) {
 	signal(SIGUSR1, terminarASAP);
 	inicializarContas();
 
-	unlink(ficheiro);
 	unlink(log_file);
+	unlink(ficheiro);
 
 	if (mkfifo(ficheiro, PERM) == -1) {
 		perror("Erro a criar o pipe!");
 		exit(0);
 	}
-	fd_ban = open(ficheiro, O_RDONLY | O_NONBLOCK);
+	fd_ban = open(ficheiro, O_RDONLY);
 	if (fd_ban == -1) {
 		perror("Erro a abrir o pipe 1.\n");
     	exit(1);
 	}
 
-	if (pthread_mutex_init(&mutex_ler, NULL) != 0) {
-		printf("Erro a iniciar trinco!");
-		return 0;
-	}
-	if (pthread_mutex_init(&mutex_esc, NULL) != 0) {
-		printf("Erro a iniciar trinco!");
-		return 0;
-	}
 	if (pthread_mutex_init(&mutex_cond, NULL) != 0) {
 		printf("Erro a iniciar trinco!");
 		return 0;
 	}
 	if (pthread_cond_init(&pode_simular, NULL) != 0) {
 		printf("Erro a iniciar trinco!");
-		return 0;
-	}
-	if (sem_init(&sem_ler, 0, 0) == -1) {
-		printf("Erro a iniciar semaforo!");
-		return 0;
-	}
-	if (sem_init(&sem_esc, 0, CMD_BUFFER_DIM) == -1) {
-		printf("Erro a iniciar semaforo!");
 		return 0;
 	}
 
@@ -221,11 +221,6 @@ int main (int argc, char** argv) {
 	}
 
 	puts("i-banco vai terminar.\n--");
-
-	/*Forca todas as tarefas bloqueadas a avancar e terminarem-se*/
-	for (i = 0; i < NUM_TRABALHADORAS; i++) {
-		sem_post(&sem_ler);
-	}
 	
 	/*Certifica-se de que todas as tarefas terminaram*/
 	for (i = 0; i < NUM_TRABALHADORAS; i++) {
@@ -239,7 +234,9 @@ int main (int argc, char** argv) {
 			kill(processos[i], SIGUSR1);
 		}
 	}
-	
+
+	unlink(ficheiro);
+
 	/*Termina os processos zombie antes de o programa acabar*/
 	for (i = 0; i < indice; i++) {
 		pid = wait(&status);
@@ -263,14 +260,10 @@ void *recebeComandos() {
 			return NULL;
 		}
 
-		//pthread_mutex_lock(&mutex_ler);
 		/*Le o comando do pipe*/
 		int n, continua = 1;
 		comando_t com;
-
-		while ((n = read(fd_ban, &com, sizeof(comando_t))) <= 0) ;
-
-		//pthread_mutex_unlock(&mutex_ler);
+		while ((n = read(fd_ban, &com, sizeof(comando_t))) <= 0);
 
 		/*Troca os indices das contas se o comando for transferir
 		e se a primeira conta tiver um indice maior que a primeira*/
@@ -278,6 +271,11 @@ void *recebeComandos() {
 			tarefaSair();
 			continua = 0;
 		}
+		if (com.operacao == SAIR_AGORA && continua) {
+			tarefaSairAgora();
+			continua = 0;
+		} 
+		registaLog(com);
 		if (com.operacao == SIMULAR && continua) {
 			tarefaSimular(com);
 			continua = 0;
@@ -298,7 +296,6 @@ void *recebeComandos() {
 				conta_2 = (com.idConta_2 - 1);
 			}
 		}
-		registaLog(com);
 
 		if (continua) {
 			contadorTarefas++;
@@ -315,8 +312,7 @@ void *recebeComandos() {
 					}
 					/*Imprime erro na introducao da conta*/
 					else {
-						printf("Erro ao transferir %d da conta %d para a conta %d.\n\n", com.valor, com.idConta_1, com.idConta_2);
-						continua = 0;
+						notificaErro(com);
 					}
 				}
 				/*Se nao houver erro na introducao da segunda conta*/
@@ -360,30 +356,9 @@ void *recebeComandos() {
 		}
 
 		/*Imprime erros na introducao da conta*/
-		if ((!contaExiste(conta_1 + 1) || !continua)){
-			switch(com.operacao) {
-				case DEBITAR:
-					printf("%s(%d, %d): ERRO\n\n", COMANDO_DEBITAR, com.idConta_1, com.valor);
-					break;
-
-				case CREDITAR:
-					printf("%s(%d, %d): Erro\n\n", COMANDO_CREDITAR, com.idConta_1, com.valor);
-					break;
-
-				case LER_SALDO:
-					printf("%s(%d): Erro.\n\n", COMANDO_LER_SALDO, com.idConta_1);
-					break;
-
-				case TRANSFERIR:
-					printf("Erro ao transferir %d da conta %d para a conta %d.\n\n", com.valor, com.idConta_1, com.idConta_2);
-					break;
-
-				default:
-					break;
-			}
+		if ((!contaExiste(conta_1 + 1) || !continua) && com.operacao != SIMULAR){
+			notificaErro(com);
 		}
-		/*Incrementa o semaforo de escrita (Indica que foi lido um comando do pipe)*/
-		//sem_post(&sem_esc);
 	}
 	return NULL;
 }
@@ -391,7 +366,7 @@ void *recebeComandos() {
 void registaLog(comando_t com) {
 	int new_fd;
 	char buf[LOGBUFSIZE];
-
+	puts("Registado");
 	switch (com.operacao) {
 		case DEBITAR:
 			new_fd = open(log_file, O_WRONLY | O_APPEND | O_CREAT, PERM);
@@ -457,6 +432,57 @@ void registaLog(comando_t com) {
 		    	exit(1);
 			}
 			break;
+
+		case SIMULAR:
+			new_fd = open(log_file, O_WRONLY | O_APPEND | O_CREAT, PERM);
+			if (new_fd == -1) {
+				perror("Erro a abrir o log.\n");
+		    	exit(1);
+			}
+			if (!(transferir(com.idConta_1, com.idConta_2, com.valor) < 0)){
+				snprintf(buf, LOGBUFSIZE, "%ld: %s %d \n", gettid(), COMANDO_SIMULAR, com.idConta_1);
+				write(new_fd, buf, sizeof(char) * strlen(buf));
+			}
+			if (close(new_fd) == -1) {
+				perror("Erro a fechar o log.\n");
+		    	exit(1);
+			}
+			break;
+	}
+}
+
+void notificaErro(comando_t com) {
+	char nome[] = "terminal-%ld";
+	char pidlong[100];
+	long pidnumber = com.process_id;
+	sprintf(pidlong, nome, pidnumber);
+	
+	int fd_pipe = open(pidlong, O_WRONLY);
+	if (fd_pipe == -1) {
+		perror("Erro a abrir o pipe 2.\n");
+    	exit(1);
+	}
+	char buf[LOGBUFSIZE];
+	switch(com.operacao) {
+		case DEBITAR:
+			snprintf(buf, LOGBUFSIZE, "%s(%d, %d): ERRO\n", COMANDO_DEBITAR, com.idConta_1, com.valor);
+			write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
+			break;
+
+		case CREDITAR:
+			snprintf(buf, LOGBUFSIZE, "%s(%d, %d): ERRO\n", COMANDO_CREDITAR, com.idConta_1, com.valor);
+			write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
+			break;
+
+		case LER_SALDO:
+			snprintf(buf, LOGBUFSIZE, "%s(%d): ERRO.\n", COMANDO_LER_SALDO, com.idConta_1);
+			write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
+			break;
+
+		case TRANSFERIR:
+			snprintf(buf, LOGBUFSIZE, "Erro ao transferir %d da conta %d para a conta %d.\n", com.valor, com.idConta_1, com.idConta_2);
+			write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
+			break;
 	}
 }
 
@@ -468,12 +494,16 @@ void tarefaDebitar(comando_t comando) {
 	
 	int fd_pipe = open(pidlong, O_WRONLY);
 	if (fd_pipe == -1) {
-		perror("Erro a abrir o pipe.\n");
+		perror("Erro a abrir o pipe 3.\n");
     	exit(1);
 	}
 	char buf[LOGBUFSIZE];
 	if (!(debitar (comando.idConta_1, comando.valor) < 0)){
-		snprintf(buf, LOGBUFSIZE, "%s(%d, %d): OK\n\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
+		snprintf(buf, LOGBUFSIZE, "%s(%d, %d): OK\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
+		write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
+	}
+	else {
+		snprintf(buf, LOGBUFSIZE, "%s(%d, %d): ERRO\n", COMANDO_DEBITAR, comando.idConta_1, comando.valor);
 		write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
 	}
 	if (close(fd_pipe) == -1) {
@@ -487,15 +517,18 @@ void tarefaCreditar(comando_t comando) {
 	char pidlong[100];
 	long pidnumber = comando.process_id;
 	sprintf(pidlong, nome, pidnumber);
-	
 	int fd_pipe = open(pidlong, O_WRONLY);
 	if (fd_pipe == -1) {
-		perror("Erro a abrir o pipe.\n");
+		perror("Erro a abrir o pipe 4.\n");
     	exit(1);
 	}
 	char buf[LOGBUFSIZE];
 	if (!(creditar (comando.idConta_1, comando.valor) < 0)){
-		snprintf(buf, LOGBUFSIZE, "%s(%d, %d): OK\n\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
+		snprintf(buf, LOGBUFSIZE, "%s(%d, %d): OK\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
+		write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
+	}
+	else {
+		snprintf(buf, LOGBUFSIZE, "%s(%d, %d): Erro\n", COMANDO_CREDITAR, comando.idConta_1, comando.valor);
 		write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
 	}
 	if (close(fd_pipe) == -1) {
@@ -513,13 +546,17 @@ void tarefaLerSaldo(comando_t comando) {
 
 	int fd_pipe = open(pidlong, O_WRONLY);
 	if (fd_pipe == -1) {
-		perror("Erro a abrir o pipe.\n");
+		perror("Erro a abrir o pipe 5.\n");
     	exit(1);
 	}
 	char buf[LOGBUFSIZE];
 	int saldo = lerSaldo(comando.idConta_1);
 	if (!(saldo < 0)){
-		snprintf(buf, LOGBUFSIZE, "%s(%d): O saldo da conta é %d.\n\n", COMANDO_LER_SALDO, comando.idConta_1, saldo);
+		snprintf(buf, LOGBUFSIZE, "%s(%d): O saldo da conta é %d.\n", COMANDO_LER_SALDO, comando.idConta_1, saldo);
+		write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
+	}
+	else {
+		snprintf(buf, LOGBUFSIZE, "%s(%d): Erro.\n", COMANDO_LER_SALDO, comando.idConta_1);
 		write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
 	}
 	if (close(fd_pipe) == -1) {
@@ -537,12 +574,16 @@ void tarefaTransferir(comando_t comando) {
 	
 	int fd_pipe = open(pidlong, O_WRONLY);
 	if (fd_pipe == -1) {
-		perror("Erro a abrir o pipe.\n");
+		perror("Erro a abrir o pipe 6.\n");
     	exit(1);
 	}
 	char buf[LOGBUFSIZE];
 	if (!(transferir(comando.idConta_1, comando.idConta_2, comando.valor) < 0)){
-		snprintf(buf, LOGBUFSIZE, "%s(%d, %d, %d): OK\n\n", COMANDO_TRANSFERIR, comando.idConta_1, comando.idConta_2, comando.valor);
+		snprintf(buf, LOGBUFSIZE, "%s(%d, %d, %d): OK\n", COMANDO_TRANSFERIR, comando.idConta_1, comando.idConta_2, comando.valor);
+		write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
+	}
+	else {
+		snprintf(buf, LOGBUFSIZE, "Erro ao transferir %d da conta %d para a conta %d.\n", comando.valor, comando.idConta_1, comando.idConta_2);
 		write(fd_pipe, buf, sizeof(char) * LOGBUFSIZE);
 	}
 	if (close(fd_pipe) == -1) {
@@ -553,7 +594,6 @@ void tarefaTransferir(comando_t comando) {
 
 void tarefaSimular(comando_t comando) {
 	int anos = comando.idConta_1;
-
 	/*Se o numero de anos for valido*/
 	if (anos > 0) {
 
@@ -562,7 +602,6 @@ void tarefaSimular(comando_t comando) {
 		while (contadorTarefas > 0 || buff_write_idx != buff_read_idx) {
 			pthread_cond_wait(&pode_simular, &mutex_cond);
 		}
-
 		/*Cria um processo filho*/
 		pid_t pid = fork();
 
@@ -579,12 +618,7 @@ void tarefaSimular(comando_t comando) {
 			/*Indica que as tarefas podem resumir as operacoes*/
 			espera = 0;
 		}
-		else {
-			puts("Erro a criar o processo filho");
-		}
 	}
-	else 
-		printf("Numero de anos invalido\n");
 }
 
 void tarefaSair() {

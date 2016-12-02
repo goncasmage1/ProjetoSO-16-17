@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/syscall.h>
 #include <fcntl.h>
+#include <time.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdlib.h>
@@ -73,10 +74,12 @@ void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas, long pid);
 
 char *args[MAXARGS + 1];
 char buffer[BUFFER_SIZE];
+
 /*Nome do pipe a criar*/
 const char *ficheiro;
-
-int indice = 0, espera = 0, fd_ter, fd_leit;
+int indice = 0, espera = 0, nao_aberto = 0, fd_ter, fd_leit;
+time_t start_t, end_t;
+double diff_t;
 
 /**Variaveis globais*/
 
@@ -87,7 +90,7 @@ int main(int argc, char** argv) {
 		ficheiro = strdup(argv[1]);
 		fd_ter = open(ficheiro, O_WRONLY);
 		if (fd_ter == -1) {
-			perror("Erro a abrir o ficheiro indicado.\n");
+			perror("Erro a abrir o pipe.\n");
 	    	exit(1);
 		}
 	}
@@ -102,11 +105,6 @@ int main(int argc, char** argv) {
 	if (mkfifo(private_pipe, PERM) == -1) {
 		perror("Erro a criar o pipe!");
 		exit(0);
-	}
-	fd_leit = open(private_pipe, O_RDONLY | O_NONBLOCK);
-	if (fd_leit == -1) {
-		perror("Erro a abrir o pipe.\n");
-    	exit(1);
 	}
 	printf("Bem-vinda/o ao i-banco\n\n");
 
@@ -162,10 +160,22 @@ int main(int argc, char** argv) {
 				continue;
 			}
 			novaTarefa(DEBITAR, atoi(args[1]), -1, atoi(args[2]), 0, getpid());
+			time(&start_t);
 			char buf[LOGBUFSIZE];
 			int n;
+			if (!nao_aberto) {
+				nao_aberto = 1;
+				fd_leit = open(private_pipe, O_RDONLY);
+				if (fd_leit == -1) {
+					perror("Erro a abrir o pipe.\n");
+			    	exit(1);
+				}
+			}
 			while ((n = read(fd_leit, buf, sizeof(char) * LOGBUFSIZE)) <= 0) ;
+			time(&end_t);
+			diff_t = difftime(end_t, start_t);
 			printf("%s\n", buf);
+			printf("Tempo de execucao do comando : %f\n\n", diff_t);
 		}
 
 		/* Creditar */
@@ -175,10 +185,22 @@ int main(int argc, char** argv) {
 				continue;
 			}
 			novaTarefa(CREDITAR, atoi(args[1]), -1, atoi(args[2]), 0, getpid());
+			time(&start_t);
 			char buf[LOGBUFSIZE];
 			int n;
+			if (!nao_aberto) {
+				nao_aberto = 1;
+				fd_leit = open(private_pipe, O_RDONLY);
+				if (fd_leit == -1) {
+					perror("Erro a abrir o pipe.\n");
+			    	exit(1);
+				}
+			}
 			while ((n = read(fd_leit, buf, sizeof(char) * LOGBUFSIZE)) <= 0) ;
+			time(&end_t);
+			diff_t = difftime(end_t, start_t);
 			printf("%s\n", buf);
+			printf("Tempo de execucao do comando : %f\n\n", diff_t);
 		}
 
 		/* Ler Saldo */
@@ -188,10 +210,22 @@ int main(int argc, char** argv) {
 				continue;
 			}
 			novaTarefa(LER_SALDO, atoi(args[1]), -1, 0, 0, getpid());
+			time(&start_t);
 			char buf[LOGBUFSIZE];
 			int n;
+			if (!nao_aberto) {
+				nao_aberto = 1;
+				fd_leit = open(private_pipe, O_RDONLY);
+				if (fd_leit == -1) {
+					perror("Erro a abrir o pipe.\n");
+			    	exit(1);
+				}
+			}
 			while ((n = read(fd_leit, buf, sizeof(char) * LOGBUFSIZE)) <= 0) ;
+			time(&end_t);
+			diff_t = difftime(end_t, start_t);
 			printf("%s\n", buf);
+			printf("Tempo de execucao do comando : %f\n\n", diff_t);
 		}
 
 		/* Transferir */
@@ -201,10 +235,22 @@ int main(int argc, char** argv) {
 				continue;
 			}
 			novaTarefa(TRANSFERIR, atoi(args[1]), atoi(args[2]), atoi(args[3]), 1, getpid());
+			time(&start_t);
 			char buf[LOGBUFSIZE];
 			int n;
+			if (!nao_aberto) {
+				nao_aberto = 1;
+				fd_leit = open(private_pipe, O_RDONLY);
+				if (fd_leit == -1) {
+					perror("Erro a abrir o pipe.\n");
+			    	exit(1);
+				}
+			}
 			while ((n = read(fd_leit, buf, sizeof(char) * LOGBUFSIZE)) <= 0) ;
+			time(&end_t);
+			diff_t = difftime(end_t, start_t);
 			printf("%s\n", buf);
+			printf("Tempo de execucao do comando : %f\n\n", diff_t);
 		}
 
 		/* Simular */
@@ -219,10 +265,6 @@ int main(int argc, char** argv) {
 
 void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas, long pid) {
 
-	/*Decrementa o semaforo de escrita (Indica que o pipe tem um comando novo para ler)*/
-	//sem_wait(&sem_esc);
-	//pthread_mutex_lock(&mutex_esc);
-
 	/*Adiciona um comando ao pipe*/
 	comando_t com;
 	com.operacao = op;
@@ -236,8 +278,4 @@ void novaTarefa(int op, int id_1, int id_2, int val, int duas_contas, long pid) 
 		perror("Erro a escrever no ficheiro indicado.\n");
     	exit(1);
 	}
-
-	//pthread_mutex_unlock(&mutex_esc);
-	/*Incrementa o semaforo de leitura (Permite que uma tarefa leia do pipe)*/
-	//sem_post(&sem_ler);
 }
